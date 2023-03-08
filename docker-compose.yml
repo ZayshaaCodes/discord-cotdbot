@@ -1,0 +1,7 @@
+version: "3.7"
+services:
+  node:
+   image: my-discord-bot
+   volumes:
+      - ./src/:/usr/src/app/src/
+      - ./.env:/usr/src/app/.env
