@@ -1,12 +1,9 @@
-# just add the packages.json
-
 FROM node
 
-# Create app directory
+# app directory
 WORKDIR /usr/src/app
-# COPY ./src .
 
-# install discord api
+# install libs
 RUN npm install discord.js --save
 RUN npm install dotenv --save
 RUN npm install pngjs --save
@@ -15,7 +12,4 @@ RUN npm install fs --save
 
 RUN npm init -y
 
-# CMD [ "node", "dotenv" ]
-
-# CMD [ "node", "src/index.js" ]
 CMD [ "node", "src/app.js" ]

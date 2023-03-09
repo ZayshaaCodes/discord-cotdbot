@@ -23,11 +23,9 @@ class DiscordClient {
     }
 
     onMessage(message) {
-        //if the user is not a bot
-        if (!message.author.bot) {
-            //log the message
-            console.log(message.author.username + ': ' + message.content);
-        }
+        if (message.author.bot) return; //ignore bot messages
+
+        console.log(message.author.username + ': ' + message.content);
     }
 
     async sendImage(channel, image) {
@@ -43,6 +41,12 @@ class DiscordClient {
     async sendText(channel, text) {
         channel.send(text);
     }
+    //send text and a clode block to a discord channel
+    async sendTextAndJson(channel, text, codeText) {
+        channel.send(text + '\n' + codeText + '\n');
+    }
+
+
 
     //get channel by name
     getChannelByName(name) {

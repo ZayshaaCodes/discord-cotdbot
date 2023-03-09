@@ -28,83 +28,78 @@ class NadeoAPI {
     return response.json();
   }
 
-  async getClubName(clubId) {
+  async getClubData(clubId) {
     const url = `${this.liveURL}/api/token/club/${clubId}`;
-    const t = await this.auth.getNadeoLiveServicesToken();
-    const clubInfo = await this.makeAPIRequest(url, "GET", null, t);
+    const clubInfo = await this.makeAPIRequest(url, "GET", null, await this.auth.getNadeoLiveServicesToken());
     return clubInfo;
   }
 
-  // async getCurrentCOTDChallengeId() {
-  //   const url = `${this.compclubURL}/api/cup-of-the-day/current`;
-  //   const matchStatus = await this.makeAPIRequest(url, token = this.auth.clubToken);
-  //   const challengeName = matchStatus.challenge.name;
-  //   return matchStatus.challenge.id;
-  // }
+  async getMemberIdsFromClub(clubId, offset, length) {
+    const url = `${this.liveURL}/api/token/club/${clubId}/member?offset=${offset}&length=${length}`;
+    const token = await this.auth.getNadeoLiveServicesToken();
+    
+    const clubInfo = await this.makeAPIRequest(url, "GET", null, token);
+    if (clubInfo.length <= 1) {
+      return [];
+    }
 
-  // async getMemberIdsFromClub(clubId, offset, length) {
+    return clubInfo;
+  }
 
-  //   const url = `${this.liveURL}/api/token/club/${clubId}/members?offset=${offset}&length=${length}`;
-  //   const clubInfo = await this.makeAPIRequest(url, token = this.auth.liveToken);
-  //   if (clubInfo.length <= 1) {
-  //     return [];
-  //   }
-  //   const members = clubInfo.clubMemberList;
-  //   const clubMembers = [];
-  //   for (let i = 0; i < members.length && i < 100; i++) {
-  //     const accountId = members[i].accountId;
-  //     clubMembers.push(accountId);
-  //   }
-  //   return clubMembers;
-  // }
+  async getCurrentCOTDChallengeId() {
+    const url = `${this.compclubURL}/api/cup-of-the-day/current`;
+    const matchStatus = await this.makeAPIRequest(url, "GET", null, await this.auth.getNadeoClubServicesToken());
+    const challengeName = matchStatus.challenge.name;
+    return matchStatus.challenge.id;
+  }
 
-  // async getPlayerDisplayNames(players) {
-  //   const url = `${this.coreURL}/accounts/displayNames/?accountIdList=${players}`;
-  //   const playerInfo = await this.makeAPIRequest(url, token = this.auth.coreToken);
-  //   return playerInfo;
-  // }
+  async getPlayerDisplayNames(players) {
+    const url = `${this.coreURL}/accounts/displayNames/?accountIdList=${players}`;
+    const playerInfo = await this.makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
+    return playerInfo;
+  }
 
-  // async getPlayerDisplayTags(players) {
-  //   const url = `${this.coreURL}/accounts/displayNames/?accountIdList=${players}`;
-  //   // console.log(url);
+  async getPlayerDisplayTags(players) {
+    const url = `${this.coreURL}/accounts/displayNames/?accountIdList=${players}`;
+    // console.log(url);
 
-  //   const playerInfo = await this.makeAPIRequest(url, token = this.auth.coreToken);
-  //   return playerInfo;
-  // }
+    const playerInfo = await this.makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
+    return playerInfo;
+  }
 
-  // async GetCurrentStandingForPlayers(players, challengeid, mapid) {
-  //   let playersEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}/players?players[]=`;
+  async GetCurrentStandingForPlayers(players, challengeid, mapid) {
+    let playersEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}/players?players[]=`;
 
-  //   // for(uint n = 0; n < players.Length; n++ )
-  //   for (let n = 0; n < players.length; n++) {
-  //     playersEndpoint += "&players[]=" + players[n];
-  //   }
+    // for(uint n = 0; n < players.Length; n++ )
+    for (let n = 0; n < players.length; n++) {
+      playersEndpoint += "&players[]=" + players[n];
+    }
 
-  //   const res = await this.makeAPIRequest(playersEndpoint, token = this.auth.clubToken);
+    const res = await this.makeAPIRequest(playersEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
 
-  //   return res;
-  // }
+    return res;
+  }
 
-  // //get challenge info
-  // async getChallengeData(challengeId) {
-  //   const challengeInfoEndpoint = `${this.compclubURL}/api/challenges/${challengeId}`;
-  //   const challengeInfo = await this.makeAPIRequest(challengeInfoEndpoint, token = this.auth.clubToken);
-  //   return challengeInfo;
-  // }
+  //get challenge info
+  async getChallengeData(challengeId) {
+    const challengeInfoEndpoint = `${this.compclubURL}/api/challenges/${challengeId}`;
+    const challengeInfo = await this.makeAPIRequest(challengeInfoEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+    return challengeInfo;
+  }
 
-  // //get challenges
-  // async getChallengeList(length = 5, offset = 0) {
-  //   const challengeListEndpoint = `${this.compclubURL}/api/challenges?length=${length}&offset=${offset}`;
-  //   const challengeList = await this.makeAPIRequest(challengeListEndpoint, token = this.auth.clubToken);
-  //   return challengeList;
-  // }
+  //get challenges
+  async getChallengeList(length = 5, offset = 0) {
+    const challengeListEndpoint = `${this.compclubURL}/api/challenges?length=${length}&offset=${offset}`;
+    const challengeList = await this.makeAPIRequest(challengeListEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+    return challengeList;
+  }
 
-  // //get map list
-  // async getMapData(auth, mapUidList) {
-  //   const mapListEndpoint = `${this.coreURL}/maps/?mapUidList=${mapUidList}`;
-  //   const mapList = await this.makeAPIRequest(mapListEndpoint, token = this.auth.liveToken);
-  //   return mapList;
-  // }
+  //get map list
+  async getMapData(auth, mapUidList) {
+    const mapListEndpoint = `${this.coreURL}/maps/?mapUidList=${mapUidList}`;
+    const mapList = await this.makeAPIRequest(mapListEndpoint, "GET", null, await this.auth.getNadeoServicesToken());
+    return mapList;
+  }
 
   // async getDiv1CutoffTime(challengeid, mapid) {
   //   const cotdEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}?offset=63&length=1`;

@@ -6,45 +6,50 @@ require('dotenv').config();
 
 class App {
     constructor() {
-        this.auth = null;     
+        this.auth = null;
         this.api = null;
         this.client = null;
     }
 
-    async init() {
+    async start() {
 
+        const clubId = process.env.CLUB_ID;
         this.client = new DiscordClient(process.env.DISCORD_TOKEN);
 
         //wait till this.client.connected = true
         while (!this.client.connected) {
             await new Promise(r => setTimeout(r, 100));
-        }      
+        }
 
-        var channel = this.client.getChannelByName("bot");
+        const channel = this.client.getChannelByName("bot");
+
+        //purge all messages in the channel
+        await channel.bulkDelete(100);
 
         //send a message to the channel
         this.client.sendText(channel, "Hello World!");
 
+        this.auth = new NadeoAuth(process.env.UBI_USER, process.env.UBI_PASS);
+        await this.auth.init();
 
-        //if init.json exists, deserialize it into a nadeo auth object
-        if (fs.existsSync("src/tokens.json")) {
-            var data = fs.readFileSync("src/tokens.json");
-            var jsonData = JSON.parse(data);
+        console.log(this.auth);
 
-            this.auth = NadeoAuth.fromJSON(jsonData);
-        } else {
-            this.auth = new NadeoAuth(process.env.UBI_USER, process.env.UBI_PASS);
-            await this.auth.init();   
+        // this.api = new NadeoAPI(this.auth);
 
-            //save the auth object to a file
-            var data = JSON.stringify(this.auth);
-            fs.writeFileSync("src/tokens.json", data);
-        }
+        // const clubdata = await this.api.getClubData(clubId);
+        // this.client.sendTextAndJson(channel, "Club Data", JSON.stringify(clubdata, null, 2));
 
-        this.api = new NadeoAPI(this.auth);
+        // const members = (await this.api.getMemberIdsFromClub(clubId, 0, 10)).clubMemberList;
 
-        // var name = await this.api.getClubName(39343);
-        // console.log(name);
+        // //list of just ids without using map
+        // const memberIds = [];
+        // for (let i = 0; i < members.length; i++) {
+        //     const member = members[i];
+        //     memberIds.push(member.accountId);
+        // }
+
+        // this.client.sendTextAndJson(channel, "Club Members", JSON.stringify(memberIds, null, 2));
+
     }
 
     async test() {
@@ -65,28 +70,28 @@ class App {
         }
 
 
-        var challanges = await api.getChallengeList(this.NadeoClubServices, 5, 0);
+        const challanges = await api.getChallengeList(this.NadeoClubServices, 5, 0);
         // console.log(challanges);
         //make a list with just the ids and names
-        var challangesList = [];
+        const challangesList = [];
         for (let i = 0; i < challanges.length; i++) {
             const challange = challanges[i];
             challangesList.push({ id: challange.id, name: challange.name });
         }
         // console.log(challangesList);
 
-        var current = await api.getCurrentCOTDChallengeId(this.NadeoClubServices);
+        const current = await api.getCurrentCOTDChallengeId(this.NadeoClubServices);
         console.log(current);
 
-        var map = "ho7WKyIBTV_dNmP9hFFadUvvtLd";
-        var cid = current;
+        const map = "ho7WKyIBTV_dNmP9hFFadUvvtLd";
+        const cid = current;
 
-        // var cdata = await api.getChallengeData(this.nadeoClub, cid);
+        // const cdata = await api.getChallengeData(this.nadeoClub, cid);
         // console.log(cdata);
 
-        var names = await api.getPlayerDisplayNames(this.NadeoServices, clubMembers);
-        var tags = await api.getPlayerDisplayTags(this.NadeoServices, clubMembers);
-        var standing = await api.GetCurrentStandingForPlayers(this.NadeoClubServices, clubMembers, cid, map);
+        const names = await api.getPlayerDisplayNames(this.NadeoServices, clubMembers);
+        const tags = await api.getPlayerDisplayTags(this.NadeoServices, clubMembers);
+        const standing = await api.GetCurrentStandingForPlayers(this.NadeoClubServices, clubMembers, cid, map);
         console.log(standing);
 
         let s = "";
@@ -119,4 +124,4 @@ class App {
 }
 
 const app = new App();
-app.init();
+app.start();
