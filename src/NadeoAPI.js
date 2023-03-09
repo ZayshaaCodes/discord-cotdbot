@@ -14,7 +14,7 @@ class NadeoAPI {
   // NadeoServices -     Core API
 
   async makeAPIRequest(url, method = "GET", body = null, token = null) {
-
+    console.log(`API request to ${url}`);
     const response = await fetch(url, {
       method: method,
       headers: token ? { 'Content-Type': 'application/json', Authorization: `nadeo_v1 t=${token}` } : { 'Content-Type': 'application/json' },

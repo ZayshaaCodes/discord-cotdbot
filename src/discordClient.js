@@ -43,7 +43,7 @@ class DiscordClient {
     }
     //send text and a clode block to a discord channel
     async sendTextAndJson(channel, text, codeText) {
-        channel.send(text + '\n' + codeText + '\n');
+        channel.send(text + '\n```js' + codeText + '```');
     }
 
 

@@ -32,12 +32,10 @@ class App {
         this.auth = new NadeoAuth(process.env.UBI_USER, process.env.UBI_PASS);
         await this.auth.init();
 
-        console.log(this.auth);
+        this.api = new NadeoAPI(this.auth);
 
-        // this.api = new NadeoAPI(this.auth);
-
-        // const clubdata = await this.api.getClubData(clubId);
-        // this.client.sendTextAndJson(channel, "Club Data", JSON.stringify(clubdata, null, 2));
+        const clubdata = await this.api.getClubData(clubId);
+        this.client.sendTextAndJson(channel, "Club Data", JSON.stringify(clubdata, null, 2));
 
         // const members = (await this.api.getMemberIdsFromClub(clubId, 0, 10)).clubMemberList;
 

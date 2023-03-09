@@ -96,25 +96,26 @@ class NadeoAuth {
     constructor(email, password) {
         this.email = email;
         this.password = password;
-        this.ubiToken = null;
         this.Tokens = {};
     }
 
     //connect to the nadeo api
     async init() {
 
-        this.ubiToken = await this.getUbiToken(this.email, this.password);
-
         //try to load tokens from file
         if (await this.loadTokens()) {
             console.log("loaded tokens from file");
-            for (const token of Object.values(this.Tokens)) {
-                if (token.isExpired()) {
-                    console.log(token.audience + "token expired, refreshing");
-                    await token.refreshAccessToken(this.ubiToken);
+            // for each key in tokens
+            for (const key of Object.keys(this.Tokens)) {
+                //if key is not UbiServices
+                if (key !== "UbiServices") {
+                    //if token is expired, refresh it
+                    if (this.Tokens[key].isExpired()) {
+                        console.log(this.Tokens[key].audience + "token expired, refreshing");
+                        await this.Tokens[key].refreshAccessToken(this.Tokens["UbiServices"]);
+                    }
                 }
             }
-
         } else {
             console.log("no tokens found, getting new ones");
             await this.getNewTokens();
@@ -129,29 +130,42 @@ class NadeoAuth {
             const data = fs.readFileSync("src/tokens.json");
             const jsonData = JSON.parse(data);
 
-            for (const token of Object.values(jsonData)) {
-                this.Tokens[token.audience] = AuthToken.fromJSON(token);
+            //foreach key in the jsondata
+            for (const key of Object.keys(jsonData)) {
+                if  (key === "UbiServices") {
+                    this.Tokens[key] = jsonData[key];
+
+                } else {
+                    const token = AuthToken.fromJSON(jsonData[key]);
+                    this.Tokens[token.audience] = token;    
+                }
+
             }
             return true;
         }
         return false;
     }
 
-    saveTokens() {
-        fs.writeFileSync("src/tokens.json", JSON.stringify(this.Tokens));
-    }
-
+    
     async getNewTokens() {
 
         this.Tokens = {};
 
+        const ubi = await this.getUbiToken(this.email, this.password);
+        this.Tokens["UbiServices"] = ubi;
+
         for (const audience of ["NadeoServices", "NadeoClubServices", "NadeoLiveServices"]) {
             let token = new AuthToken(audience);
-            await token.initAuthForAudience(audience, this.ubiToken);
+            await token.initAuthForAudience(audience, ubi);
             this.Tokens[audience] = token;
         }
 
+
         this.saveTokens();
+    }
+
+    saveTokens() {
+        fs.writeFileSync("src/tokens.json", JSON.stringify(this.Tokens));
     }
 
     //get the auth token for the current user
