@@ -8,6 +8,7 @@ yarn-error.log*
 COTDLiveQualifying/
 .env
 tokens.json
+clubdata.json
 
 # IDE settings
 .vscode/

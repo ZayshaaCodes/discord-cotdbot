@@ -37,7 +37,7 @@ class NadeoAPI {
   async getMemberIdsFromClub(clubId, offset, length) {
     const url = `${this.liveURL}/api/token/club/${clubId}/member?offset=${offset}&length=${length}`;
     const token = await this.auth.getNadeoLiveServicesToken();
-    
+
     const clubInfo = await this.makeAPIRequest(url, "GET", null, token);
     if (clubInfo.length <= 1) {
       return [];
@@ -50,7 +50,7 @@ class NadeoAPI {
     const url = `${this.compclubURL}/api/cup-of-the-day/current`;
     const matchStatus = await this.makeAPIRequest(url, "GET", null, await this.auth.getNadeoClubServicesToken());
     const challengeName = matchStatus.challenge.name;
-    return matchStatus.challenge.id;
+    return matchStatus.challenge;
   }
 
   async getPlayerDisplayNames(players) {
@@ -60,7 +60,7 @@ class NadeoAPI {
   }
 
   async getPlayerDisplayTags(players) {
-    const url = `${this.coreURL}/accounts/displayNames/?accountIdList=${players}`;
+    const url = `${this.coreURL}/accounts/clubTags/?accountIdList=${players}`;
     // console.log(url);
 
     const playerInfo = await this.makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
@@ -100,6 +100,36 @@ class NadeoAPI {
     const mapList = await this.makeAPIRequest(mapListEndpoint, "GET", null, await this.auth.getNadeoServicesToken());
     return mapList;
   }
+
+  //GET https://competition.trackmania.nadeo.club/api/challenges/{challengeId}/leaderboard?length={length}&offset={offset}
+  async getChallengeLeaderboard(challengeId, length = 20, offset = 0) {
+    const challengeLeaderboardEndpoint =
+      `${this.compclubURL}/api/challenges/${challengeId}/leaderboard?length=${length}&offset=${offset}`;
+    const challengeLeaderboard =
+      await this.makeAPIRequest(challengeLeaderboardEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+    return challengeLeaderboard;
+  }
+
+  async GetCurrentStandings(challengeid) {
+    let playersEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/?length=10&offset=0`;
+
+    // for(uint n = 0; n < players.Length; n++ )
+    for (let n = 0; n < players.length; n++) {
+      playersEndpoint += "&players[]=" + players[n];
+    }
+
+    const res = await this.makeAPIRequest(playersEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+
+    return res;
+  }
+
+  //https://trackmania.io/api/totd/0
+  async getTOTDData() {
+    const url = `https://trackmania.io/api/totd/0`;
+    const totdData = await this.makeAPIRequest(url, "GET");
+    return totdData;
+  }
+
 
   // async getDiv1CutoffTime(challengeid, mapid) {
   //   const cotdEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}?offset=63&length=1`;

@@ -1,22 +1,46 @@
 const { NadeoAPI } = require('./NadeoAPI');
 const { NadeoAuth } = require('./NadeoAuth');
 const { DiscordClient } = require('./discordClient');
+const { ClubData, ClubMember } = require('./ClubData');
 const fs = require('fs');
 require('dotenv').config();
 
+// class ClubData {
+//     constructor() {
+//       this.name = "";
+//       this.tag = "";
+//       this.id = 0;
+//       this.members = {};
+//     }
+//   }
+
+//   class ClubMember
+//   {
+//     constructor(id, name) {
+//       this.id = id;
+//       this.name = name;
+//       this.tag = "";
+//     }
+//   }
 class App {
     constructor() {
         this.auth = null;
         this.api = null;
         this.client = null;
+        this.clubData = null;
     }
 
     async start() {
 
+        this.clubdata = new ClubData();
+        const updateClub = false;
+
+        const date = new Date();
+        console.log("starting at " + date.toLocaleString());
+
         const clubId = process.env.CLUB_ID;
         this.client = new DiscordClient(process.env.DISCORD_TOKEN);
 
-        //wait till this.client.connected = true
         while (!this.client.connected) {
             await new Promise(r => setTimeout(r, 100));
         }
@@ -26,18 +50,56 @@ class App {
         //purge all messages in the channel
         await channel.bulkDelete(100);
 
-        //send a message to the channel
-        this.client.sendText(channel, "Hello World!");
-
         this.auth = new NadeoAuth(process.env.UBI_USER, process.env.UBI_PASS);
         await this.auth.init();
 
         this.api = new NadeoAPI(this.auth);
 
-        const clubdata = await this.api.getClubData(clubId);
-        this.client.sendTextAndJson(channel, "Club Data", JSON.stringify(clubdata, null, 2));
+        if (updateClub) {
+            await this.UpdateClubInfo(clubId, channel);
+            await this.UpdateClubMemberInfo(clubId);
+            fs.writeFileSync("src/clubdata.json", JSON.stringify(this.clubdata, null, 2));
+        } else {
+            const fileData = JSON.parse(fs.readFileSync("src/clubdata.json"));
+            this.clubdata = Object.assign(new ClubData(), fileData);
+        }
 
-        // const members = (await this.api.getMemberIdsFromClub(clubId, 0, 10)).clubMemberList;
+        var daysData = (await this.api.getTOTDData()).days;
+        var lastDay = daysData[daysData.length - 1].map;
+
+        var mapinfo = {
+            mapUid: lastDay.mapUid,
+            mapName: lastDay.name
+        };
+
+        const challengeData = await this.api.getChallengeList();
+
+        for (const challenge of challengeData) {
+            // if "COTD" is in the name
+            if (challenge.name.indexOf("COTD") > -1) {
+                var challengeDate = new Date(challenge.startDate * 1000);
+                var timeTill = challengeDate - date;
+                console.log(challenge.name + ' starts at ' + challengeDate.toLocaleString() + '. diff: ' + this.msToTime(timeTill));
+            }
+        }
+        
+        
+        // console.log(this.clubdata);
+
+        // const id = await this.api.getCurrentCOTDChallengeId()
+        // console.log(id.id);
+        // const challengeLeaderboard = await this.api.getChallengeLeaderboard(id.id);
+        // console.log(challengeLeaderboard);
+
+
+        // this.client.sendTextAndJson(channel, "Club Info", JSON.stringify(members, null, 2));
+
+        // save clubdata to file
+
+
+        // this.client.sendTextAndJson(channel, "Club Info", JSON.stringify(this.clubdata, null, 2));
+
+
 
         // //list of just ids without using map
         // const memberIds = [];
@@ -48,6 +110,63 @@ class App {
 
         // this.client.sendTextAndJson(channel, "Club Members", JSON.stringify(memberIds, null, 2));
 
+    }
+
+    // convert milliseconds to hh:mm:ss format, if time is negative include a - sign at the start
+    msToTime(ms) {
+        var sign = ms < 0 ? "-" : "";
+        var seconds = Math.floor((Math.abs(ms) / 1000) % 60);
+        var minutes = Math.floor((Math.abs(ms) / (1000 * 60)) % 60);
+        var hours = Math.floor((Math.abs(ms) / (1000 * 60 * 60)) % 24);
+
+        return sign + hours + ":" + minutes + ":" + seconds;
+    }
+        
+
+    async UpdateClubMemberInfo(clubId) {
+        const pageSize = 20;
+        let count = null;
+        let pages = 1;
+        for (let i = 0; i < pages; i++) {
+            const membersReq = await this.api.getMemberIdsFromClub(clubId, i * pageSize, pageSize);
+            if (pages == 1) {
+                count = membersReq.itemCount;
+                pages = membersReq.maxPage;
+            }
+
+            const members = membersReq.clubMemberList;
+            for (let i = 0; i < members.length; i++) {
+
+                const members = membersReq.clubMemberList;
+                //for each member, add to clubdata.members
+                for (let i = 0; i < members.length; i++) {
+                    const id = members[i].accountId;
+                    const memberData = new ClubMember(id, null);
+                    this.clubdata.members[id] = memberData;
+                }
+            }
+        }
+
+        //map with id : name from members list
+        const memberIds = Object.keys(this.clubdata.members);
+        for (let i = 0; i < memberIds.length; i += 20) {
+            const ids = memberIds.slice(i, i + 20);
+            const names = await this.api.getPlayerDisplayNames(ids);
+            const tags = await this.api.getPlayerDisplayTags(ids);
+            for (let i = 0; i < ids.length; i++) {
+                this.clubdata.members[ids[i]].name = names[i].displayName;
+                if (tags[i] != null)
+                    this.clubdata.members[ids[i]].tag = tags[i].clubTag;
+            }
+        }
+    }
+
+    async UpdateClubInfo(clubId) {
+        const clubReqData = await this.api.getClubData(clubId);
+
+        this.clubdata.name = clubReqData.name;
+        this.clubdata.tag = clubReqData.tag;
+        this.clubdata.id = clubReqData.id;
     }
 
     async test() {
