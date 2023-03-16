@@ -9,8 +9,12 @@ class ClubData {
   }
 
   async loadFromFile() {
-    const fileData = await fs.promises.readFile("src/clubdata.json");
-    this.clubdata = Object.assign(new ClubData(), fileData);
+    const fileData = await fs.promises.readFile("cache/clubdata.json");
+    const data = JSON.parse(fileData);
+    this.name = data.name;
+    this.tag = data.tag;
+    this.id = data.id;
+    this.members = data.members;
   }
 }
 

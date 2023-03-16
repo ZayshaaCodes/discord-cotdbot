@@ -25,8 +25,10 @@ class App {
 
         this.api = new NadeoAPI(this.auth);
 
-        this.clubdata = new ClubData();
-        await this.clubdata.loadFromFile();
+        this.clubData = new ClubData();
+        await this.clubData.loadFromFile();
+
+        console.log(this.clubData);
 
         const date = new Date();
         console.log("starting at " + date.toLocaleString());
@@ -280,5 +282,5 @@ class App {
 }
 
 // export app
-module.exports = [ App ];
+module.exports = { App };
 
