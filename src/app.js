@@ -1,127 +1,227 @@
-const { NadeoAPI } = require('./NadeoAPI');
-const { NadeoAuth } = require('./NadeoAuth');
-const { DiscordClient } = require('./discordClient');
-const { ClubData, ClubMember } = require('./ClubData');
+const { NadeoAPI } = require('./interop/NadeoAPI');
+const { NadeoAuth } = require('./interop/NadeoAuth');
+const { DiscordClient } = require('./interop/discordClient');
+const { ClubData, ClubMember } = require('./objects/ClubData');
+
+const { Canvas, registerFont } = require('canvas');
+const PNG = require('pngjs').PNG;
+
 const fs = require('fs');
 require('dotenv').config();
 
-// class ClubData {
-//     constructor() {
-//       this.name = "";
-//       this.tag = "";
-//       this.id = 0;
-//       this.members = {};
-//     }
-//   }
-
-//   class ClubMember
-//   {
-//     constructor(id, name) {
-//       this.id = id;
-//       this.name = name;
-//       this.tag = "";
-//     }
-//   }
 class App {
     constructor() {
         this.auth = null;
         this.api = null;
         this.client = null;
         this.clubData = null;
+        this.cotdQueue = {};
     }
 
     async start() {
-
-        this.clubdata = new ClubData();
-        const updateClub = false;
-
-        const date = new Date();
-        console.log("starting at " + date.toLocaleString());
-
-        const clubId = process.env.CLUB_ID;
-        this.client = new DiscordClient(process.env.DISCORD_TOKEN);
-
-        while (!this.client.connected) {
-            await new Promise(r => setTimeout(r, 100));
-        }
-
-        const channel = this.client.getChannelByName("bot");
-
-        //purge all messages in the channel
-        await channel.bulkDelete(100);
 
         this.auth = new NadeoAuth(process.env.UBI_USER, process.env.UBI_PASS);
         await this.auth.init();
 
         this.api = new NadeoAPI(this.auth);
 
-        if (updateClub) {
-            await this.UpdateClubInfo(clubId, channel);
-            await this.UpdateClubMemberInfo(clubId);
-            fs.writeFileSync("src/clubdata.json", JSON.stringify(this.clubdata, null, 2));
-        } else {
-            const fileData = JSON.parse(fs.readFileSync("src/clubdata.json"));
-            this.clubdata = Object.assign(new ClubData(), fileData);
+        this.clubdata = new ClubData();
+        await this.clubdata.loadFromFile();
+
+        const date = new Date();
+        console.log("starting at " + date.toLocaleString());
+
+        const clubId = process.env.CLUB_ID;
+
+        registerFont('resources/forkawesome-webfont.ttf', { family: 'Fork Awesome' });
+
+        //discord client
+        this.client = new DiscordClient(process.env.DISCORD_TOKEN);
+        while (!this.client.connected) {
+            await new Promise(r => setTimeout(r, 100));
         }
+        const channel = this.client.getChannelByName("bot");
 
-        var daysData = (await this.api.getTOTDData()).days;
-        var lastDay = daysData[daysData.length - 1].map;
+        //register methods to receive messages and bind it to a OnDiscordMessage method
+        this.client.registerMessageHandler(this.OnDiscordMessage.bind(this));
 
-        var mapinfo = {
+        //clear the channel
+        await channel.bulkDelete(100);
+
+        //club information
+        // await this.UpdateClubData(clubId, channel);
+
+        //map information
+        const daysData = (await this.api.getTOTDData()).days;
+        const lastDay = daysData[daysData.length - 1].map;
+
+        const mapinfo = {
             mapUid: lastDay.mapUid,
             mapName: lastDay.name
         };
 
-        const challengeData = await this.api.getChallengeList();
+        var challenges = await this.api.getChallengeList(5, 0);
 
-        for (const challenge of challengeData) {
-            // if "COTD" is in the name
-            if (challenge.name.indexOf("COTD") > -1) {
-                var challengeDate = new Date(challenge.startDate * 1000);
-                var timeTill = challengeDate - date;
-                console.log(challenge.name + ' starts at ' + challengeDate.toLocaleString() + '. diff: ' + this.msToTime(timeTill));
+        // filter for challenges containting "COTD" in the name, only store name, startDate, and id
+        challenges = challenges.filter(c => c.name.includes("COTD")).map(c => {
+            const date = new Date();
+            return {
+                name: c.name,
+                startDate: c.startDate,
+                id: c.id
+            };
+        });
+
+        //for each challenge in the future, add it to the queue
+        for (const c of challenges) {
+            const timeTill = c.startDate * 1000 - date;
+            if (timeTill > 0) {
+                this.cotdQueue[c.id] = c;
             }
         }
-        
-        
-        // console.log(this.clubdata);
 
-        // const id = await this.api.getCurrentCOTDChallengeId()
-        // console.log(id.id);
-        // const challengeLeaderboard = await this.api.getChallengeLeaderboard(id.id);
-        // console.log(challengeLeaderboard);
+        console.log("COTD queue: " + JSON.stringify(this.cotdQueue));
+
+        // const zay = "90dc7c06-3fad-42ad-b92e-a230efb8f088";
+
+        while (false) {
+            // const nextCOTD = await this.GetNextCotd(date);
+
+            // console.log("next COTD: " + nextCOTD.name);
+            // let timeTill = nextCOTD.startDate * 1000 - date;
+            // let timeTillString = this.msToTime(timeTill);
+
+            // const testing = true;
+            // if (testing) {
+            //     timeTill = 1000;
+            //     timeTillString = this.msToTime(timeTill);
+            // }
+
+            // console.log("waiting for next COTD: " + timeTillString);
+            // await new Promise(r => setTimeout(r, timeTill));
+            // console.log("running scheduled COTD");
 
 
-        // this.client.sendTextAndJson(channel, "Club Info", JSON.stringify(members, null, 2));
+            // const s = c.toString().padStart(4, ' ');
+            // console.log(`${s} | ${id} | ${member.tag} ${member.name}`)
 
-        // save clubdata to file
+            // build a collection of unique tags using a set
+            const tags = new Set();
+            for (const id in this.clubdata.members) {
+                const member = this.clubdata.members[id];
+                tags.add(member.tag);
+            }
+
+            console.log(tags);
+
+            let c = 0;
+            // for each unique tag, render a tag image and send it to discord
+            for (const t of tags) {
+                const tag = this.splitTextWithColor(t);
+
+                const w = 512;
+                const h = 80;
+                const canvas = new Canvas(w, h)
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = "#000000";
+                ctx.fillRect(0, 0, w, h);
+                ctx.font = '64px "Fork Awesome"';
+
+                // draw tag
+                let x = 0;
+                for (let i = 0; i < tag.length; i++) {
+                    const code = tag[i];
+                    const text = tag[i + 1];
+                    if (code.startsWith("$")) {
+                        const color = code.substring(1, 4);
+                        ctx.fillStyle = "#" + color;
+                        ctx.fillText(text, x, 64);
+                        x += ctx.measureText(text).width;
+                        i++;
+                    }
+                }
+
+                const testImage = ctx.canvas.toBuffer('image/png');
+                this.client.sendImage(channel, testImage);
+
+                c++;
+                //stop after 10
+                if (c > 10) {
+                    break;
+                }
+            }
+
+            break;
+        }
+
+    }
+
+    OnDiscordMessage(message) {
+        console.log("received message: " + message.content);
+    }
 
 
-        // this.client.sendTextAndJson(channel, "Club Info", JSON.stringify(this.clubdata, null, 2));
+    async UpdateClubData(clubId, channel) {
+        await this.UpdateClubInfo(clubId, channel);
+        await this.UpdateClubMemberInfo(clubId);
+        fs.writeFileSync("cache/clubdata.json", JSON.stringify(this.clubdata, null, 2));
+    }
 
+    // split text into array of formatting blocks/color codes and text  
+    // example inputs: 
+    // $S$FFFCL$8CFO$4AFO$08FB
+    // $S$FFFCL$8CFO$4AFO$08F
+    // $17BX$479R$766T$B63R$E50V$<
+    // example outputs:
+    // [ '$FFF' , 'CL' , '$8CF' , 'O' , '$4AF' , 'O' , '$08F' , 'B' ]
+    // [ '$FFF' , 'CL' , '$8CF' , 'O' , '$4AF' , 'O' , '$08F' ]
+    // [ '$17B' , 'X' , '$479' , 'R' , '$766' , 'T' , '$B63' , 'R' , '$E50' , 'V' , '$<' ]
+    splitTextWithColor(text) {
+        // regex to match '$[oiwntslgzOIWNTSLGZ$]{1}' or '$[0-9a-fA-F]{3}' or any others
+        const regex = /\$[oiwntslgzOIWNTSLGZ$]{1}|\$[0-9a-fA-F]{3}/g;
+        const matches = text.matchAll(regex);
+        const result = [];
+        for (const match of matches) {
+            const m = match[0];
+            // starts with $ and is a length of 2
+            if (m.startsWith('$') && m.length == 2) {
+                continue;
+            }
+            result.push(m);
+        }
+        console.log(result);
+        return result;
+    }
 
-
-        // //list of just ids without using map
-        // const memberIds = [];
-        // for (let i = 0; i < members.length; i++) {
-        //     const member = members[i];
-        //     memberIds.push(member.accountId);
-        // }
-
-        // this.client.sendTextAndJson(channel, "Club Members", JSON.stringify(memberIds, null, 2));
-
+    async GetNextCotd(date) {
+        const challengeData = await this.api.getChallengeList();
+        let nextCOTD = null;
+        //reverse for
+        for (let i = challengeData.length - 1; i >= 0; i--) {
+            const challenge = challengeData[i];
+            // if "COTD" is in the name
+            if (challenge.name.indexOf("COTD") > -1) {
+                const challengeDate = new Date(challenge.startDate * 1000);
+                const timeTill = challengeDate - date;
+                console.log(challenge.name + ' starts at ' + challengeDate.toLocaleString() + '. diff: ' + this.msToTime(timeTill));
+                if (timeTill > 0 && nextCOTD == null) {
+                    nextCOTD = challenge;
+                }
+            }
+        }
+        return nextCOTD;
     }
 
     // convert milliseconds to hh:mm:ss format, if time is negative include a - sign at the start
     msToTime(ms) {
-        var sign = ms < 0 ? "-" : "";
-        var seconds = Math.floor((Math.abs(ms) / 1000) % 60);
-        var minutes = Math.floor((Math.abs(ms) / (1000 * 60)) % 60);
-        var hours = Math.floor((Math.abs(ms) / (1000 * 60 * 60)) % 24);
+        const sign = ms < 0 ? "-" : "";
+        const seconds = Math.floor((Math.abs(ms) / 1000) % 60);
+        const minutes = Math.floor((Math.abs(ms) / (1000 * 60)) % 60);
+        const hours = Math.floor((Math.abs(ms) / (1000 * 60 * 60)));
 
         return sign + hours + ":" + minutes + ":" + seconds;
     }
-        
+
 
     async UpdateClubMemberInfo(clubId) {
         const pageSize = 20;
@@ -153,14 +253,20 @@ class App {
             const ids = memberIds.slice(i, i + 20);
             const names = await this.api.getPlayerDisplayNames(ids);
             const tags = await this.api.getPlayerDisplayTags(ids);
-            for (let i = 0; i < ids.length; i++) {
-                this.clubdata.members[ids[i]].name = names[i].displayName;
-                if (tags[i] != null)
-                    this.clubdata.members[ids[i]].tag = tags[i].clubTag;
+            //doing names and tag separately because the api doesnt always return the same amount of data
+            for (let i = 0; i < names.length; i++) {
+                const name = names[i];
+                this.clubdata.members[name.accountId].name = name.displayName;
             }
+            for (let i = 0; i < tags.length; i++) {
+                const tag = tags[i];
+                this.clubdata.members[tag.accountId].tag = tag.clubTag;
+            }
+
         }
     }
 
+    // update club info
     async UpdateClubInfo(clubId) {
         const clubReqData = await this.api.getClubData(clubId);
 
@@ -169,76 +275,10 @@ class App {
         this.clubdata.id = clubReqData.id;
     }
 
-    async test() {
+    
 
-        const api = new NadeoAPI();
-        await this.NadeoLiveServices.authenticate();
-        await this.NadeoServices.authenticate();
-        await this.NadeoClubServices.authenticate();
-
-        const clubMembers = await api.getMemberIdsFromClub(this.NadeoLiveServices, 39343, 0, 20);
-        console.log(clubMembers);
-
-        //in groups of 20, get club members and append
-        for (let i = 20; i < 100; i += 20) {
-            const members = await api.getMemberIdsFromClub(this.NadeoLiveServices, 39343, i, 20);
-            console.log(members);
-            clubMembers.push(...members);
-        }
-
-
-        const challanges = await api.getChallengeList(this.NadeoClubServices, 5, 0);
-        // console.log(challanges);
-        //make a list with just the ids and names
-        const challangesList = [];
-        for (let i = 0; i < challanges.length; i++) {
-            const challange = challanges[i];
-            challangesList.push({ id: challange.id, name: challange.name });
-        }
-        // console.log(challangesList);
-
-        const current = await api.getCurrentCOTDChallengeId(this.NadeoClubServices);
-        console.log(current);
-
-        const map = "ho7WKyIBTV_dNmP9hFFadUvvtLd";
-        const cid = current;
-
-        // const cdata = await api.getChallengeData(this.nadeoClub, cid);
-        // console.log(cdata);
-
-        const names = await api.getPlayerDisplayNames(this.NadeoServices, clubMembers);
-        const tags = await api.getPlayerDisplayTags(this.NadeoServices, clubMembers);
-        const standing = await api.GetCurrentStandingForPlayers(this.NadeoClubServices, clubMembers, cid, map);
-        console.log(standing);
-
-        let s = "";
-        //freach each record in the standing
-        for (let i = 0; i < standing.records.length; i++) {
-            const record = standing.records[i];
-            // console.log(record);
-
-            //get the player name with maching id
-            const name = names.find(x => x.accountId == record.player);
-            //get tag with matching id
-            const tag = tags.find(x => x.accountId == record.player);
-            // console.log(tag);
-            //check if tag undefined
-
-            let tagString = "";
-            if (tag != undefined) {
-                tagString = "[" + tag.clubTag + "]";
-                tagString = tagString.replace(/\$[wnoitsgzWNOITSGZ]|(\$[0-9a-fA-F]{3})/g, '')
-            }
-
-            s += tagString + name.displayName + " | " + record.rank + " | " + record.score + "\n";
-        }
-
-        //remove the last \n
-        s = s.slice(0, -1);
-
-        return s;
-    }
 }
 
-const app = new App();
-app.start();
+// export app
+module.exports = [ App ];
+

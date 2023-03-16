@@ -10,16 +10,16 @@ class AuthToken {
     }
 
     isExpired() {
-        let flag = new Date() > this.expires;
-        return flag;
+        let date = (new Date()).getTime();
+        return date > this.expires;
     }
 
     isExpiredRefresh() {
-        let flag = new Date() > this.refreshExpires;
-        return flag;
+        let date = (new Date()).getTime();
+        return date > this.refreshExpires;
     }
 
-    async token(){
+    async token() {
         if (this.isExpired()) {
             await this.refreshAccessToken();
         }
@@ -59,7 +59,7 @@ class AuthToken {
 
     async refreshAccessToken(ubiToken) {
         if (this.isExpiredRefresh()) {
-            console.log( this.audience + "refresh token expired, getting new one");
+            console.log(this.audience + "refresh token expired, getting new one");
             await this.initAuthForAudience(this.audience, ubiToken);
             return
         }
@@ -106,6 +106,7 @@ class NadeoAuth {
         if (await this.loadTokens()) {
             console.log("loaded tokens from file");
             // for each key in tokens
+            let doSave = false;
             for (const key of Object.keys(this.Tokens)) {
                 //if key is not UbiServices
                 if (key !== "UbiServices") {
@@ -113,9 +114,11 @@ class NadeoAuth {
                     if (this.Tokens[key].isExpired()) {
                         console.log(this.Tokens[key].audience + "token expired, refreshing");
                         await this.Tokens[key].refreshAccessToken(this.Tokens["UbiServices"]);
+                        doSave = true;
                     }
                 }
             }
+            if (doSave) this.saveTokens();
         } else {
             console.log("no tokens found, getting new ones");
             await this.getNewTokens();
@@ -126,18 +129,20 @@ class NadeoAuth {
 
     async loadTokens() {
         //if init.json exists, deserialize it into a nadeo auth object
-        if (fs.existsSync("src/tokens.json")) {
-            const data = fs.readFileSync("src/tokens.json");
+        if (fs.existsSync("cache/tokens.json")) {
+            const data = fs.readFileSync("cache/tokens.json");
             const jsonData = JSON.parse(data);
 
             //foreach key in the jsondata
             for (const key of Object.keys(jsonData)) {
-                if  (key === "UbiServices") {
+                if (key === "UbiServices") {
                     this.Tokens[key] = jsonData[key];
+                    //log payload
+                    // console.log(getJwtPayload(this.Tokens[key]));
 
                 } else {
                     const token = AuthToken.fromJSON(jsonData[key]);
-                    this.Tokens[token.audience] = token;    
+                    this.Tokens[token.audience] = token;
                 }
 
             }
@@ -146,7 +151,7 @@ class NadeoAuth {
         return false;
     }
 
-    
+
     async getNewTokens() {
 
         this.Tokens = {};
@@ -165,7 +170,7 @@ class NadeoAuth {
     }
 
     saveTokens() {
-        fs.writeFileSync("src/tokens.json", JSON.stringify(this.Tokens));
+        fs.writeFileSync("cache/tokens.json", JSON.stringify(this.Tokens));
     }
 
     //get the auth token for the current user
@@ -179,7 +184,6 @@ class NadeoAuth {
                     "Ubi-AppId": "86263886-327a-4328-ac69-527f0d20a237",
                     Authorization: `Basic ${btoa(`${user}:${pw}`)}`,
                     "User-Agent": `discord cotd bot / ${user}`,
-                    "audience": this.audience,
                 },
             }
         );
@@ -189,11 +193,13 @@ class NadeoAuth {
         }
 
         const authData = await authResponse.json();
-        return authData.ticket;
+        const ticket = authData.ticket;
+
+        return ticket;
     }
 
     async getNadeoServicesToken() {
-        
+
         return this.Tokens["NadeoServices"].token();
     }
 
@@ -220,7 +226,7 @@ function getJwtPayload(token) {
 //get exp date from jwt token
 function getJwtExp(token) {
     const payload = getJwtPayload(token);
-    return new Date(payload.exp * 1000);
+    return payload.exp * 1000;
 }
 
 

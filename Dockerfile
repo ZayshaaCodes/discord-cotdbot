@@ -9,6 +9,7 @@ RUN npm install dotenv --save
 RUN npm install pngjs --save
 RUN npm install canvas --save
 RUN npm install fs --save
+RUN npm install express ejs --save
 
 # set timezone to system time zone
 RUN ln -snf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime && echo America/Los_Angeles > /etc/timezone
