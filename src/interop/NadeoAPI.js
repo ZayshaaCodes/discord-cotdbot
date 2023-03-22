@@ -139,6 +139,21 @@ class NadeoAPI {
     return clubInfo;
   }
 
+  //GET https://competition.trackmania.nadeo.club/api/competitions?length={length}&offset={offset}
+  async getCompetitionList(length = 10, offset = 0) {
+    const competitionListEndpoint = `${this.compclubURL}/api/competitions?length=${length}&offset=${offset}`;
+    const competitionList = await this.makeAPIRequest(competitionListEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+    return competitionList;
+  }
+  
+  //GET https://competition.trackmania.nadeo.club/api/competitions/{competitionId}/leaderboard?length={length}&offset={offset}
+  async getCompetitionLeaderboard(competitionId, length = 20, offset = 0) {
+    const competitionLeaderboardEndpoint =
+      `${this.compclubURL}/api/competitions/${competitionId}/leaderboard?length=${length}&offset=${offset}`;
+    const competitionLeaderboard =  await this.makeAPIRequest(competitionLeaderboardEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+    return competitionLeaderboard;
+  }
+
   // async getDiv1CutoffTime(challengeid, mapid) {
   //   const cotdEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}?offset=63&length=1`;
   //   const divOneCutoff = await this.makeAPIRequest(cotdEndpoint);

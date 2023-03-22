@@ -5,16 +5,24 @@ class ClubData {
     this.name = "";
     this.tag = "";
     this.id = 0;
+    this.membercount = 0;
     this.members = {};
   }
 
   async loadFromFile() {
-    const fileData = await fs.promises.readFile("cache/clubdata.json");
-    const data = JSON.parse(fileData);
-    this.name = data.name;
-    this.tag = data.tag;
-    this.id = data.id;
-    this.members = data.members;
+    try {
+      const fileData = await fs.promises.readFile("cache/clubdata.json");
+      const data = JSON.parse(fileData);
+      this.name = data.name;
+      this.tag = data.tag;
+      this.id = data.id;
+      this.members = data.members;
+      this.membercount = data.membercount;
+      return true;
+    } catch (err) {
+      console.log(err);
+    }
+    return false;
   }
 }
 

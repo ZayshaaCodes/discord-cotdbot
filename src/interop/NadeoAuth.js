@@ -1,4 +1,5 @@
 const fs = require('fs');
+require('dotenv').config();
 
 class AuthToken {
     constructor(audience) {
@@ -93,9 +94,7 @@ class AuthToken {
 }
 
 class NadeoAuth {
-    constructor(email, password) {
-        this.email = email;
-        this.password = password;
+    constructor() {
         this.Tokens = {};
     }
 
@@ -112,6 +111,9 @@ class NadeoAuth {
                 if (key !== "UbiServices") {
                     //if token is expired, refresh it
                     if (this.Tokens[key].isExpired()) {
+                        if(!doSave){
+                            this.Tokens["UbiServices"] = await this.getUbiToken(process.env.UBI_USER, process.env.UBI_PASS);
+                        }
                         console.log(this.Tokens[key].audience + "token expired, refreshing");
                         await this.Tokens[key].refreshAccessToken(this.Tokens["UbiServices"]);
                         doSave = true;
@@ -156,7 +158,7 @@ class NadeoAuth {
 
         this.Tokens = {};
 
-        const ubi = await this.getUbiToken(this.email, this.password);
+        const ubi = await this.getUbiToken(process.env.UBI_USER, process.env.UBI_PASS);
         this.Tokens["UbiServices"] = ubi;
 
         for (const audience of ["NadeoServices", "NadeoClubServices", "NadeoLiveServices"]) {

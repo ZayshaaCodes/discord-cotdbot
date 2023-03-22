@@ -2,6 +2,8 @@ const { NadeoAPI } = require('./interop/NadeoAPI');
 const { NadeoAuth } = require('./interop/NadeoAuth');
 const { DiscordClient } = require('./interop/discordClient');
 const { ClubData, ClubMember } = require('./objects/ClubData');
+const ScheduledTasks = require('./ScheduledTasks');
+
 
 const { Canvas, registerFont } = require('canvas');
 const PNG = require('pngjs').PNG;
@@ -14,185 +16,235 @@ class App {
         this.auth = null;
         this.api = null;
         this.client = null;
+        this.botChannel = null;
+        this.currentMap = null;
+        this.curCotd = null;
         this.clubData = null;
-        this.cotdQueue = {};
+        this.cotdhours = [2, 10, 18];
+        this.cotdtimes = this.cotdhours.map(h => new Date(new Date().setUTCHours(h)));
+        this.scheduledTasks = new ScheduledTasks(); // for cron jobs
     }
 
-    async start() {
-
-        this.auth = new NadeoAuth(process.env.UBI_USER, process.env.UBI_PASS);
+    async init() {
+        this.auth = new NadeoAuth();
         await this.auth.init();
 
         this.api = new NadeoAPI(this.auth);
 
         this.clubData = new ClubData();
-        await this.clubData.loadFromFile();
+        if (!(await this.clubData.loadFromFile()))
+            this.UpdateClubData();
 
-        console.log(this.clubData);
 
         const date = new Date();
         console.log("starting at " + date.toLocaleString());
 
-        const clubId = process.env.CLUB_ID;
+        //canvas dings
+        // registerFont('resources/forkawesome-webfont.ttf', { family: 'Fork Awesome' });
 
-        registerFont('resources/forkawesome-webfont.ttf', { family: 'Fork Awesome' });
 
         //discord client
         this.client = new DiscordClient(process.env.DISCORD_TOKEN);
-        while (!this.client.connected) {
-            await new Promise(r => setTimeout(r, 100));
-        }
-        const channel = this.client.getChannelByName("bot");
+        while (!this.client.connected) await new Promise(r => setTimeout(r, 100));
+        this.botChannel = this.client.getChannelByName("bot");
 
-        //register methods to receive messages and bind it to a OnDiscordMessage method
-        this.client.registerMessageHandler(this.OnDiscordMessage.bind(this));
-
-        //clear the channel
-        await channel.bulkDelete(100);
-
-        //club information
-        // await this.UpdateClubData(clubId, channel);
-
-        //map information
-        const daysData = (await this.api.getTOTDData()).days;
-        const lastDay = daysData[daysData.length - 1].map;
-
-        const mapinfo = {
-            mapUid: lastDay.mapUid,
-            mapName: lastDay.name
-        };
-
-        var challenges = await this.api.getChallengeList(5, 0);
-
-        // filter for challenges containting "COTD" in the name, only store name, startDate, and id
-        challenges = challenges.filter(c => c.name.includes("COTD")).map(c => {
-            const date = new Date();
-            return {
-                name: c.name,
-                startDate: c.startDate,
-                id: c.id
-            };
+        // --------------- COTD COMMAND ---------------
+        this.client.registerNewCommand("cotd", "get current cotd", async (interaction) => {
+            const cotd = await this.getMostRecentCOTD();
+            const map = await this.getTodaysMap();
+            interaction.reply("Map: " + App.tmSplit(map.map.name).plain + "\nchallenge id: " + cotd.recent.id);
         });
 
-        //for each challenge in the future, add it to the queue
+        // --------------- STANDING COMMAND ---------------
+        this.client.registerNewCommand("standing", "get current cotd standings", async (interaction) => {
+            let members = Object.keys(this.clubData.members);
+
+            const msg = await interaction.reply("Fetching records...");
+
+            const allStanding = [];
+            for (let i = 0; i < members.length; i += 20) {
+                // for (let i = 0; i < 10; i += 20) {
+                let ids = members.slice(i, i + 20);
+                // console.log(ids);
+                let standing = await this.api.GetCurrentStandingForPlayers(ids, this.curCotd.recent.id, this.currentMap.mapUid);
+                // console.log(standing);
+                allStanding.push(...standing.records);
+
+                // this.botChannel.send(standing);
+            }
+
+            // append player names to the records
+            for (const record of allStanding) {
+                record.playerName = this.clubData.members[record.player].name;
+            }
+
+            // sort by rank
+            allStanding.sort((a, b) => a.rank - b.rank);
+            console.log(allStanding);
+
+            let print = ""
+            for (const record of allStanding) {
+                print += `${record.rank} - ${record.playerName} - ${this.msToTime(record.score)}\n`;
+            }
+
+            // console.log(standing);
+            if (print.length == 0) print = "No records yet!";
+            msg.edit(print);
+            // interaction.reply(print);
+            // this.botChannel.send(print);
+        });
+
+        this.curCotd = await this.getMostRecentCOTD();
+        this.currentMap = await (await this.getTodaysMap()).map;
+
+        console.log("current cotd: " + JSON.stringify(this.curCotd.recent, null, 2));
+        console.log("current map: " + this.currentMap.name);
+
+        if (false) {
+            await this.UpdateClubData(39343);
+        }
+    }
+
+
+    getNextCotdTime() {
+
+        const next = this.cotdtimes.filter(t => t > new Date()); // get the next ones
+        if (next.length == 0) { // if we are past all of them, get the next day's
+            next = this.cotdtimes[0];
+            next.setDate(next.getDate() + 1);
+        }
+        return next[0];
+    }
+
+    async start() {
+        await this.init();
+
+        const hrs = this.cotdhours.join(","); // just so i can test easier
+
+        // const comps = await this.api.getCompetitionList();
+        // console.log(comps);
+
+        // const lb = await this.api.getCompetitionLeaderboard(5263);
+        // console.log(lb);
+
+        //     const competitionLeaderboardEndpoint =`https://competition.trackmania.nadeo.club/api/competitions/5263/leaderboard`;
+        //    const r =  await this.api.makeAPIRequest(competitionLeaderboardEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+        //    console.log(r);
+
+        //    return;
+
+
+        // --------------------- start of cotd ---------------------
+        this.scheduledTasks.add("start", `1 ${hrs} * * *`, async () => { // 0th minute of the hour
+            this.curCotd = await this.getMostRecentCOTD();
+            if (this.curCotd.isNewMap) {
+                this.currentMap = await (await this.getTodaysMap()).map;
+            }
+
+            this.botChannel.send(this.curCotd.recent.name + " starting!");
+            this.botChannel.send("Map: " + App.tmSplit(this.currentMap.name).plain);
+            this.botChannel.send("challenge id: " + this.curCotd.recent.uid);
+        });
+
+        // --------------------- cotd polling ---------------------
+        this.scheduledTasks.add("poll", `16 ${hrs} * * *`, async () => { // every minute from 1 to 15
+
+            let members = Object.keys(this.clubData.members);
+            console.log(members.splice(0, 5));
+
+
+            const allStanding = [];
+            for (let i = 0; i < members.length; i += 20) {
+                // for (let i = 0; i < 10; i += 20) {
+                let ids = members.slice(i, i + 20);
+                let standing = await this.api.GetCurrentStandingForPlayers(ids, this.curCotd.recent.id, this.currentMap.mapUid);
+                allStanding.push(...standing.records);
+                // this.botChannel.send(standing);
+            }
+
+            // append player names to the records
+            for (const record of allStanding) {
+                record.playerName = this.clubData.members[record.player].name;
+            }
+
+            // sort by rank
+            allStanding.sort((a, b) => a.rank - b.rank);
+            console.log(allStanding);
+
+            let print = ""
+            for (const record of allStanding) {
+                print += `${record.rank} - ${record.playerName} - ${this.msToTime(record.score)}\n`;
+            }
+
+            // console.log(standing);
+            if (print.length == 0) print = "No records yet!";
+            this.botChannel.send(print);
+        });
+
+        // --------------------- end of cotd ---------------------
+        this.scheduledTasks.add("end", `16 ${hrs} * * *`, async () => { // 16th minute of the hour
+            this.botChannel.send("COTD qualifying is ending!");
+        });
+
+    }
+
+    static tmSplit(input) {
+        // Use regex to match Trackmania formatting characters
+        const formattingRegex = /\$[OIWNTSGZLoiwntsgzl$]{1}|\$[0-9a-fA-F]{3}/g;
+        const displayTextArray = input.split(formattingRegex);
+        const formattingMatches = input.match(formattingRegex) || [];
+
+        const arr = [];
+        const displayedText = [];
+        for (let i = 0; i < displayTextArray.length; i++) {
+            if (formattingMatches[i]) arr.push(formattingMatches[i]);
+            if (displayTextArray[i] != "") arr.push(displayTextArray[i]);
+            if (displayTextArray[i] && !displayTextArray[i].startsWith("$")) displayedText.push(displayTextArray[i]);
+        }
+        const plain = displayedText.join("");
+        return { input, arr, plain };
+    }
+
+    async getTodaysMap() {
+        const daysData = (await this.api.getTOTDData()).days;
+        const day = daysData[daysData.length - 1];
+        const map = day.map;
+        return { map, day: day.monthday };
+    }
+
+    async getMostRecentCOTD() {
+        const challenges = (await this.api.getChallengeList(10, 0)).filter(c => c.name.includes("COTD"));
+        let mostRecentCOTD = null;
+        const currentTime = new Date();
+
         for (const c of challenges) {
-            const timeTill = c.startDate * 1000 - date;
-            if (timeTill > 0) {
-                this.cotdQueue[c.id] = c;
+            const startDate = new Date(c.startDate * 1000 - 1000 * 60 * 3);
+            const diff = startDate.getTime() - currentTime.getTime();
+            if (diff < 0) { // if the challenge has already started, it could be thes most recent
+                return { recent: c, isNewMap: (/COTD.*#1/).test(c.name) };
             }
         }
-
-        console.log("COTD queue: " + JSON.stringify(this.cotdQueue));
-
-        // const zay = "90dc7c06-3fad-42ad-b92e-a230efb8f088";
-
-        while (false) {
-            // const nextCOTD = await this.GetNextCotd(date);
-
-            // console.log("next COTD: " + nextCOTD.name);
-            // let timeTill = nextCOTD.startDate * 1000 - date;
-            // let timeTillString = this.msToTime(timeTill);
-
-            // const testing = true;
-            // if (testing) {
-            //     timeTill = 1000;
-            //     timeTillString = this.msToTime(timeTill);
-            // }
-
-            // console.log("waiting for next COTD: " + timeTillString);
-            // await new Promise(r => setTimeout(r, timeTill));
-            // console.log("running scheduled COTD");
+    }
 
 
-            // const s = c.toString().padStart(4, ' ');
-            // console.log(`${s} | ${id} | ${member.tag} ${member.name}`)
 
-            // build a collection of unique tags using a set
-            const tags = new Set();
-            for (const id in this.clubdata.members) {
-                const member = this.clubdata.members[id];
-                tags.add(member.tag);
-            }
-
-            console.log(tags);
-
-            let c = 0;
-            // for each unique tag, render a tag image and send it to discord
-            for (const t of tags) {
-                const tag = this.splitTextWithColor(t);
-
-                const w = 512;
-                const h = 80;
-                const canvas = new Canvas(w, h)
-                const ctx = canvas.getContext('2d');
-                ctx.fillStyle = "#000000";
-                ctx.fillRect(0, 0, w, h);
-                ctx.font = '64px "Fork Awesome"';
-
-                // draw tag
-                let x = 0;
-                for (let i = 0; i < tag.length; i++) {
-                    const code = tag[i];
-                    const text = tag[i + 1];
-                    if (code.startsWith("$")) {
-                        const color = code.substring(1, 4);
-                        ctx.fillStyle = "#" + color;
-                        ctx.fillText(text, x, 64);
-                        x += ctx.measureText(text).width;
-                        i++;
-                    }
-                }
-
-                const testImage = ctx.canvas.toBuffer('image/png');
-                this.client.sendImage(channel, testImage);
-
-                c++;
-                //stop after 10
-                if (c > 10) {
-                    break;
-                }
-            }
-
-            break;
-        }
-
+    getMemberById(id) {
+        const member = this.clubData.members[id + ""];
+        return member || null;
     }
 
     OnDiscordMessage(message) {
         console.log("received message: " + message.content);
     }
 
-
-    async UpdateClubData(clubId, channel) {
-        await this.UpdateClubInfo(clubId, channel);
-        await this.UpdateClubMemberInfo(clubId);
-        fs.writeFileSync("cache/clubdata.json", JSON.stringify(this.clubdata, null, 2));
-    }
-
-    // split text into array of formatting blocks/color codes and text  
-    // example inputs: 
-    // $S$FFFCL$8CFO$4AFO$08FB
-    // $S$FFFCL$8CFO$4AFO$08F
-    // $17BX$479R$766T$B63R$E50V$<
-    // example outputs:
-    // [ '$FFF' , 'CL' , '$8CF' , 'O' , '$4AF' , 'O' , '$08F' , 'B' ]
-    // [ '$FFF' , 'CL' , '$8CF' , 'O' , '$4AF' , 'O' , '$08F' ]
-    // [ '$17B' , 'X' , '$479' , 'R' , '$766' , 'T' , '$B63' , 'R' , '$E50' , 'V' , '$<' ]
-    splitTextWithColor(text) {
-        // regex to match '$[oiwntslgzOIWNTSLGZ$]{1}' or '$[0-9a-fA-F]{3}' or any others
-        const regex = /\$[oiwntslgzOIWNTSLGZ$]{1}|\$[0-9a-fA-F]{3}/g;
-        const matches = text.matchAll(regex);
-        const result = [];
-        for (const match of matches) {
-            const m = match[0];
-            // starts with $ and is a length of 2
-            if (m.startsWith('$') && m.length == 2) {
-                continue;
-            }
-            result.push(m);
+    // In your App class
+    getData(key) {
+        switch (key) {
+            case 'clubData':
+                return this.clubData;
+            default:
+                return null;
         }
-        console.log(result);
-        return result;
     }
 
     async GetNextCotd(date) {
@@ -211,19 +263,26 @@ class App {
                 }
             }
         }
+        console.log("next COTD: " + nextCOTD.name);
         return nextCOTD;
     }
 
     // convert milliseconds to hh:mm:ss format, if time is negative include a - sign at the start
     msToTime(ms) {
-        const sign = ms < 0 ? "-" : "";
+        const sign = ms < 0 ? "-" : ""; // if time is negative include a - sign at the start
+        const milliseconds = Math.floor(Math.abs(ms) % 1000);
         const seconds = Math.floor((Math.abs(ms) / 1000) % 60);
         const minutes = Math.floor((Math.abs(ms) / (1000 * 60)) % 60);
         const hours = Math.floor((Math.abs(ms) / (1000 * 60 * 60)));
 
-        return sign + hours + ":" + minutes + ":" + seconds;
+        return sign + hours + ":" + minutes + ":" + seconds + "." + milliseconds;
     }
 
+    async UpdateClubData(clubId) {
+        await this.UpdateClubInfo(clubId);
+        await this.UpdateClubMemberInfo(clubId);
+        fs.writeFileSync("cache/clubdata.json", JSON.stringify(this.clubData, null, 2));
+    }
 
     async UpdateClubMemberInfo(clubId) {
         const pageSize = 20;
@@ -244,13 +303,13 @@ class App {
                 for (let i = 0; i < members.length; i++) {
                     const id = members[i].accountId;
                     const memberData = new ClubMember(id, null);
-                    this.clubdata.members[id] = memberData;
+                    this.clubData.members[id] = memberData;
                 }
             }
         }
 
         //map with id : name from members list
-        const memberIds = Object.keys(this.clubdata.members);
+        const memberIds = Object.keys(this.clubData.members);
         for (let i = 0; i < memberIds.length; i += 20) {
             const ids = memberIds.slice(i, i + 20);
             const names = await this.api.getPlayerDisplayNames(ids);
@@ -258,26 +317,26 @@ class App {
             //doing names and tag separately because the api doesnt always return the same amount of data
             for (let i = 0; i < names.length; i++) {
                 const name = names[i];
-                this.clubdata.members[name.accountId].name = name.displayName;
+                this.clubData.members[name.accountId].name = name.displayName;
             }
             for (let i = 0; i < tags.length; i++) {
                 const tag = tags[i];
-                this.clubdata.members[tag.accountId].tag = tag.clubTag;
+                this.clubData.members[tag.accountId].tag = tag.clubTag;
             }
-
         }
+        this.clubData.memberCount = count;
     }
 
-    // update club info
     async UpdateClubInfo(clubId) {
-        const clubReqData = await this.api.getClubData(clubId);
+        const req = await this.api.getClubData(clubId);
 
-        this.clubdata.name = clubReqData.name;
-        this.clubdata.tag = clubReqData.tag;
-        this.clubdata.id = clubReqData.id;
+        this.clubData.name = req.name;
+        this.clubData.tag = req.tag;
+        this.clubData.id = req.id;
+
     }
 
-    
+
 
 }
 

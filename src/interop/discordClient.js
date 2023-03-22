@@ -1,11 +1,10 @@
 const { Client, IntentsBitField, REST, Routes } = require('discord.js');
 require('dotenv').config();
 
-
-
 class DiscordClient {
     constructor(token) {
         this.connected = false;
+        this.token = token;
         this.client = new Client({
             intents: [
                 IntentsBitField.Flags.Guilds,
@@ -15,38 +14,44 @@ class DiscordClient {
                 IntentsBitField.Flags.GuildPresences
             ],
         });
-        this.client.login(token);
+        this.client.login(this.token);
         this.client.on('messageCreate', this.onMessage.bind(this));
         this.client.on('ready', this.onReady.bind(this));
         this.client.on('interactionCreate', this.onInteraction.bind(this));
 
-        const commands = [
-            {
-                name: 'test',
-                description: 'test command',
-            }
-        ];
+        this.commands = {};
+    }
 
-        (async () => {
-            const rest = new REST({ version: '10' }).setToken(token);
-            try {
-                await rest.put(
-                    Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-                    { body: commands },
-                );
-                console.log('Successfully registered application commands.');
-            } catch (error) {
-                console.error(error);
-            }
-        })();
+    async registerNewCommand(name, description, handlerFunction) {
+        this.commands[name] = { name, description, handlerFunction };
 
+        // body needs to be just an array of the commands name  and description
+        const bodyCommands = [];
+        for (const command in this.commands) {
+            bodyCommands.push({ name: this.commands[command].name, description: this.commands[command].description });
+        }
+
+        const rest = new REST({ version: '10' }).setToken(this.token);
+        try {
+            await rest.put(
+                Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
+                { body: bodyCommands },
+            );
+            console.log(`Successfully registered application command "${name}".`);
+        } catch (error) {
+            console.error(error);
+        }
     }
 
     onInteraction(interaction) {
         if (!interaction.isCommand()) return;
-        console.log(interaction);
-        if (interaction.commandName === 'test') {
-            interaction.reply('test');
+
+        const handlerFunction = this.commands[interaction.commandName].handlerFunction;
+
+        if (handlerFunction) {
+            handlerFunction(interaction);
+        } else {
+            console.log(`No registered handler for command: ${interaction.commandName}`);
         }
     }
 

@@ -5,8 +5,6 @@ const path = require('path');
 (async () => {
     const appInstance = new App();
     await appInstance.start();
-
-
     const app = express();
 
     app.set('view engine', 'ejs');
@@ -31,5 +29,50 @@ const path = require('path');
 
     app.get('/api/clubData', (req, res) => {
         res.json(appInstance.clubData);
+    });
+
+    app.get('/api/member/:id', (req, res) => {
+        const memberId = req.params.id;
+        const member = appInstance.getMemberById(memberId);
+        
+        if (member) {
+            res.json(member);
+        } else {
+            res.status(404).json({ message: 'Member not found' });
+        }
+    });
+
+    app.get('/api/data/:key', (req, res) => {
+        const key = req.params.key;
+        const data = appInstance.getData(key);
+
+        if (data) {
+            res.json(data);
+        } else {
+            res.status(404).send('Data not found');
+        }
+    });
+
+
+    app.get('/task/:id', (req, res) => {
+        const taskId = req.params.id;
+        const task = appInstance.scheduledTasks.getTask(taskId);
+
+        if (task) {
+            res.json(task);
+        } else {
+            res.status(404).json({ message: 'Task not found' });
+        }
+    });
+
+    //get all tasks
+    app.get('/tasks', (req, res) => {
+        const tasks = appInstance.scheduledTasks.tasks;
+
+        if (tasks) {
+            res.json(tasks);
+        } else {
+            res.status(404).json({ message: 'Tasks not found' });
+        }
     });
 })();
