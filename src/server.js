@@ -34,7 +34,7 @@ const path = require('path');
     app.get('/api/member/:id', (req, res) => {
         const memberId = req.params.id;
         const member = appInstance.getMemberById(memberId);
-        
+
         if (member) {
             res.json(member);
         } else {
@@ -74,5 +74,32 @@ const path = require('path');
         } else {
             res.status(404).json({ message: 'Tasks not found' });
         }
+    });
+
+    //get standing for challenge id
+    app.get('/api/standing/:id', (req, res) => {
+        (async () => {
+            const challengeId = req.params.id;
+            const standing = await appInstance.GetChallengeStandingsCached(challengeId);
+
+            if (standing) {
+                res.json(standing);
+            } else {
+                res.status(404).json({ message: 'Standing not found' });
+            }
+        })();
+    });
+
+    //get most recent challenge id
+    app.get('/api/lastChallenge', (req, res) => {
+        (async () => {
+            const challengeId = (await appInstance.getMostRecentCOTD()).recent.id;
+
+            if (challengeId) {
+                res.json(challengeId);
+            } else {
+                res.status(404).json({ message: 'Challenge not found' });
+            }
+        })();
     });
 })();

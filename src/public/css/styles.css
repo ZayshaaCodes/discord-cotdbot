@@ -1,0 +1,15 @@
+/* no scroll bars */
+html {
+  overflow: hidden;
+}
+
+body {
+  font-family: 'ForkAwesome', sans-serif;
+  background-color: rgba(0, 248, 4, 0.801);
+  color: white;
+}
+
+@font-face {
+  font-family: 'ForkAwesome';
+  src: url('./fonts/forkawesome-webfont.ttf') format('truetype');
+}

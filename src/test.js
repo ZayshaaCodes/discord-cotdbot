@@ -1,15 +1,13 @@
-function calculateMRR(D, DOC, FR, RPM) {
-    const surfaceInchesPerMin = RPM * Math.PI * D;
-    const MRR = DOC * FR * surfaceInchesPerMin;
-    return MRR;
-  }
-  
-  // Example usage:
-  const diameter = 4; // inches
-  const depthOfCut = 0.1; // inches
-  const feedRate = 0.01; // inches per revolution
-  const spindleSpeed = 500; // revolutions per minute
-  
-  const MRR = calculateMRR(diameter, depthOfCut, feedRate, spindleSpeed);
-  console.log(`Material Removal Rate: ${MRR.toFixed(2)} cubic inches per minute`);
-  
+const {encode, decode} = require('gpt-3-encoder')
+
+const str = 'This is an example sentence to try encoding out on!'
+const encoded = encode(str)
+console.log('Encoded this string looks like: ', encoded)
+
+console.log('We can look at each token and what it represents')
+for(let token of encoded){
+  console.log({token, string: decode([token])})
+}
+
+const decoded = decode(encoded)
+console.log('We can decode it back into:\n', decoded)

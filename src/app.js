@@ -4,7 +4,6 @@ const { DiscordClient } = require('./interop/discordClient');
 const { ClubData, ClubMember } = require('./objects/ClubData');
 const ScheduledTasks = require('./ScheduledTasks');
 
-
 const { Canvas, registerFont } = require('canvas');
 const PNG = require('pngjs').PNG;
 
@@ -40,7 +39,7 @@ class App {
         console.log("starting at " + date.toLocaleString());
 
         //canvas dings
-        // registerFont('resources/forkawesome-webfont.ttf', { family: 'Fork Awesome' });
+        registerFont('resources/forkawesome-webfont.ttf', { family: 'Fork Awesome' });
 
 
         //discord client
@@ -48,54 +47,30 @@ class App {
         while (!this.client.connected) await new Promise(r => setTimeout(r, 100));
         this.botChannel = this.client.getChannelByName("bot");
 
-        // --------------- COTD COMMAND ---------------
-        this.client.registerNewCommand("cotd", "get current cotd", async (interaction) => {
-            const cotd = await this.getMostRecentCOTD();
-            const map = await this.getTodaysMap();
-            interaction.reply("Map: " + App.tmSplit(map.map.name).plain + "\nchallenge id: " + cotd.recent.id);
-        });
+        // // --------------- COTD COMMAND ---------------
+        // this.client.registerNewCommand("cotd", "get current cotd", async (interaction) => {
+        //     const cotd = await this.getMostRecentCOTD();
+        //     const map = await this.getTodaysMap();
+        //     interaction.reply("Map: " + App.tmSplit(map.name).plain + "\nchallenge id: " + cotd.recent.id);
+        // });
 
         // --------------- STANDING COMMAND ---------------
         this.client.registerNewCommand("standing", "get current cotd standings", async (interaction) => {
-            let members = Object.keys(this.clubData.members);
-
             const msg = await interaction.reply("Fetching records...");
 
-            const allStanding = [];
-            for (let i = 0; i < members.length; i += 20) {
-                // for (let i = 0; i < 10; i += 20) {
-                let ids = members.slice(i, i + 20);
-                // console.log(ids);
-                let standing = await this.api.GetCurrentStandingForPlayers(ids, this.curCotd.recent.id, this.currentMap.mapUid);
-                // console.log(standing);
-                allStanding.push(...standing.records);
+            const chalId = (await this.getMostRecentCOTD()).recent.id;
 
-                // this.botChannel.send(standing);
-            }
+            let data = await this.GetChallengeStandingsCached(chalId);
+            if (data.length == 0) data = "No records yet!";
 
-            // append player names to the records
-            for (const record of allStanding) {
-                record.playerName = this.clubData.members[record.player].name;
-            }
-
-            // sort by rank
-            allStanding.sort((a, b) => a.rank - b.rank);
-            console.log(allStanding);
-
-            let print = ""
-            for (const record of allStanding) {
-                print += `${record.rank} - ${record.playerName} - ${this.msToTime(record.score)}\n`;
-            }
-
-            // console.log(standing);
-            if (print.length == 0) print = "No records yet!";
-            msg.edit(print);
-            // interaction.reply(print);
-            // this.botChannel.send(print);
+            // create canvas and context
+            const imageBuffer = GenerateStandingsTableImage(data);
+            
+            msg.edit({ files: [imageBuffer] });
         });
 
         this.curCotd = await this.getMostRecentCOTD();
-        this.currentMap = await (await this.getTodaysMap()).map;
+        this.currentMap = await this.getTodaysMap();
 
         console.log("current cotd: " + JSON.stringify(this.curCotd.recent, null, 2));
         console.log("current map: " + this.currentMap.name);
@@ -105,40 +80,16 @@ class App {
         }
     }
 
-
-    getNextCotdTime() {
-
-        const next = this.cotdtimes.filter(t => t > new Date()); // get the next ones
-        if (next.length == 0) { // if we are past all of them, get the next day's
-            next = this.cotdtimes[0];
-            next.setDate(next.getDate() + 1);
-        }
-        return next[0];
-    }
-
     async start() {
         await this.init();
 
         const hrs = this.cotdhours.join(","); // just so i can test easier
 
-        // const comps = await this.api.getCompetitionList();
-        // console.log(comps);
-
-        // const lb = await this.api.getCompetitionLeaderboard(5263);
-        // console.log(lb);
-
-        //     const competitionLeaderboardEndpoint =`https://competition.trackmania.nadeo.club/api/competitions/5263/leaderboard`;
-        //    const r =  await this.api.makeAPIRequest(competitionLeaderboardEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
-        //    console.log(r);
-
-        //    return;
-
-
         // --------------------- start of cotd ---------------------
         this.scheduledTasks.add("start", `1 ${hrs} * * *`, async () => { // 0th minute of the hour
             this.curCotd = await this.getMostRecentCOTD();
             if (this.curCotd.isNewMap) {
-                this.currentMap = await (await this.getTodaysMap()).map;
+                this.currentMap = await this.getTodaysMap();
             }
 
             this.botChannel.send(this.curCotd.recent.name + " starting!");
@@ -148,37 +99,10 @@ class App {
 
         // --------------------- cotd polling ---------------------
         this.scheduledTasks.add("poll", `16 ${hrs} * * *`, async () => { // every minute from 1 to 15
+            let standings = await this.GetRecentStandings();
+            if (standings.length == 0) standings = "No records yet!";
 
-            let members = Object.keys(this.clubData.members);
-            console.log(members.splice(0, 5));
-
-
-            const allStanding = [];
-            for (let i = 0; i < members.length; i += 20) {
-                // for (let i = 0; i < 10; i += 20) {
-                let ids = members.slice(i, i + 20);
-                let standing = await this.api.GetCurrentStandingForPlayers(ids, this.curCotd.recent.id, this.currentMap.mapUid);
-                allStanding.push(...standing.records);
-                // this.botChannel.send(standing);
-            }
-
-            // append player names to the records
-            for (const record of allStanding) {
-                record.playerName = this.clubData.members[record.player].name;
-            }
-
-            // sort by rank
-            allStanding.sort((a, b) => a.rank - b.rank);
-            console.log(allStanding);
-
-            let print = ""
-            for (const record of allStanding) {
-                print += `${record.rank} - ${record.playerName} - ${this.msToTime(record.score)}\n`;
-            }
-
-            // console.log(standing);
-            if (print.length == 0) print = "No records yet!";
-            this.botChannel.send(print);
+            this.botChannel.send(standings);
         });
 
         // --------------------- end of cotd ---------------------
@@ -188,35 +112,128 @@ class App {
 
     }
 
+    async GetRecentStandings() {
+        const cotd = await this.getMostRecentCOTD();
+        const map = await this.getTodaysMap();
+
+        const allStanding = await this.GetChallengeStandings(cotd.recent.id, map.mapUid);
+
+        //save to cache
+        const cacheFile = `./cache/${cotd.recent.id}.json`;
+        fs.writeFileSync(cacheFile, JSON.stringify(allStanding, null, 2));
+
+        let print = "";
+        for (const record of allStanding) {
+            print += `${record.rank} - ${record.playerName} - ${App.msToTime(record.score)}\n`;
+        }
+        return print;
+    }
+
+    async GetChallengeStandingsCached(challengeId) {
+        const cacheFile = `./cache/${challengeId}.json`;
+        if (fs.existsSync(cacheFile)) {
+            const data = fs.readFileSync(cacheFile);
+            const jsonData = JSON.parse(data);
+            return jsonData;
+        }
+    }
+
+    async GetChallengeStandings(challengeId, mapUid) {
+        let members = Object.keys(this.clubData.members);
+        const allStanding = [];
+        for (let i = 0; i < members.length; i += 20) {
+            let ids = members.slice(i, i + 20);
+            let standing = await this.api.GetCurrentStandingForPlayers(ids, challengeId, mapUid);
+            allStanding.push(...standing.records);
+        }
+
+        for (const record of allStanding) {
+            record.playerName = this.clubData.members[record.player].name;
+            record.playerTag = this.clubData.members[record.player].tag;
+        }
+
+        // sort by rank
+        allStanding.sort((a, b) => a.rank - b.rank);
+        console.log(allStanding);
+
+        const cacheFile = `./cache/${challengeId}.json`;
+        fs.writeFileSync(cacheFile, JSON.stringify(allStanding, null, 2));
+
+        return allStanding;
+    }
+
+    static tmTag(arr, ctx, x, y) {
+        let openSpans = false;
+        let currentX = 0;
+
+        ctx.fillText('[', x + currentX, y);
+        currentX += ctx.measureText('[').width;
+
+        for (let i = 0; i < arr.length; i++) {
+            if (arr[i].startsWith("$")) {
+                if (arr[i].length == 4) {
+                    if (openSpans) {
+                        ctx.restore();
+                    }
+                    const color = arr[i].substr(1);
+                    ctx.save();
+                    ctx.fillStyle = "#" + color;
+                    openSpans = true;
+                }
+            } else {
+                ctx.fillText(arr[i], x + currentX, y);
+                currentX += ctx.measureText(arr[i]).width;
+            }
+        }
+        if (openSpans) {
+            ctx.restore();
+            openSpans = false;
+        }
+
+        ctx.fillText(']', x + currentX, y);
+        currentX += ctx.measureText(']').width;
+
+        return currentX + x;
+    }
+
+
+
     static tmSplit(input) {
         // Use regex to match Trackmania formatting characters
-        const formattingRegex = /\$[OIWNTSGZLoiwntsgzl$]{1}|\$[0-9a-fA-F]{3}/g;
-        const displayTextArray = input.split(formattingRegex);
-        const formattingMatches = input.match(formattingRegex) || [];
+        const formattingRegex = /\$[oiwntsgzl$<]{1}|\$[0-9a-f]{3}|.+?/gi;
+        const matches = input.match(formattingRegex) || [];
 
         const arr = [];
         const displayedText = [];
-        for (let i = 0; i < displayTextArray.length; i++) {
-            if (formattingMatches[i]) arr.push(formattingMatches[i]);
-            if (displayTextArray[i] != "") arr.push(displayTextArray[i]);
-            if (displayTextArray[i] && !displayTextArray[i].startsWith("$")) displayedText.push(displayTextArray[i]);
+        for (let i = 0; i < matches.length; i++) {
+            if (matches[i]) arr.push(matches[i]);
+            if (matches[i] && !matches[i].startsWith("$")) {
+                displayedText.push(matches[i]);
+            }
         }
         const plain = displayedText.join("");
         return { input, arr, plain };
     }
 
+    static msToTime(ms) {
+        const sign = ms < 0 ? "-" : "";
+        const milliseconds = Math.floor(Math.abs(ms) % 1000).toString().padStart(3, '0');
+        const seconds = Math.floor((Math.abs(ms) / 1000) % 60).toString().padStart(2, '0');
+        const minutes = Math.floor((Math.abs(ms) / (1000 * 60)) % 60).toString()
+        const hours = Math.floor(Math.abs(ms) / (1000 * 60 * 60));
+
+        return `${sign}${hours ? `${hours}:` : ""}${minutes}:${seconds}.${milliseconds}`;
+    }
+
     async getTodaysMap() {
         const daysData = (await this.api.getTOTDData()).days;
         const day = daysData[daysData.length - 1];
-        const map = day.map;
-        return { map, day: day.monthday };
+        return day.map;
     }
 
     async getMostRecentCOTD() {
-        const challenges = (await this.api.getChallengeList(10, 0)).filter(c => c.name.includes("COTD"));
-        let mostRecentCOTD = null;
+        const challenges = (await this.api.getChallengeList(5, 0)).filter(c => c.name.includes("COTD"));
         const currentTime = new Date();
-
         for (const c of challenges) {
             const startDate = new Date(c.startDate * 1000 - 1000 * 60 * 3);
             const diff = startDate.getTime() - currentTime.getTime();
@@ -225,8 +242,6 @@ class App {
             }
         }
     }
-
-
 
     getMemberById(id) {
         const member = this.clubData.members[id + ""];
@@ -245,37 +260,6 @@ class App {
             default:
                 return null;
         }
-    }
-
-    async GetNextCotd(date) {
-        const challengeData = await this.api.getChallengeList();
-        let nextCOTD = null;
-        //reverse for
-        for (let i = challengeData.length - 1; i >= 0; i--) {
-            const challenge = challengeData[i];
-            // if "COTD" is in the name
-            if (challenge.name.indexOf("COTD") > -1) {
-                const challengeDate = new Date(challenge.startDate * 1000);
-                const timeTill = challengeDate - date;
-                console.log(challenge.name + ' starts at ' + challengeDate.toLocaleString() + '. diff: ' + this.msToTime(timeTill));
-                if (timeTill > 0 && nextCOTD == null) {
-                    nextCOTD = challenge;
-                }
-            }
-        }
-        console.log("next COTD: " + nextCOTD.name);
-        return nextCOTD;
-    }
-
-    // convert milliseconds to hh:mm:ss format, if time is negative include a - sign at the start
-    msToTime(ms) {
-        const sign = ms < 0 ? "-" : ""; // if time is negative include a - sign at the start
-        const milliseconds = Math.floor(Math.abs(ms) % 1000);
-        const seconds = Math.floor((Math.abs(ms) / 1000) % 60);
-        const minutes = Math.floor((Math.abs(ms) / (1000 * 60)) % 60);
-        const hours = Math.floor((Math.abs(ms) / (1000 * 60 * 60)));
-
-        return sign + hours + ":" + minutes + ":" + seconds + "." + milliseconds;
     }
 
     async UpdateClubData(clubId) {
@@ -333,13 +317,62 @@ class App {
         this.clubData.name = req.name;
         this.clubData.tag = req.tag;
         this.clubData.id = req.id;
-
     }
-
-
-
 }
 
 // export app
 module.exports = { App };
 
+function GenerateStandingsTableImage(data) {
+    const canvasWidth = 500;
+    const canvasHeight = data.length * 25 + 50; // dynamic height based on number of rows
+    const canvas = new Canvas(canvasWidth, canvasHeight);
+    const ctx = canvas.getContext('2d');
+
+    // render the data to canvas
+    let y = 30;
+    ctx.font = 'bold 20px Fork Awesome';
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
+
+    //fill the background dark grey
+    ctx.fillStyle = '#2c2f33';
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+
+    const xPositions = [10, 60, 110, 400];
+    //render table headers
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('Rank', xPositions[0], y);
+    ctx.fillText('Div', xPositions[1], y);
+    ctx.fillText('Player', xPositions[2], y);
+    ctx.fillText('Score', xPositions[3], y);
+    y += 25;
+
+    //render table body
+    ctx.font = 'bold 17px Fork Awesome';
+    ctx.fillStyle = '#ffffff';
+    data.forEach(item => {
+        ctx.fillStyle = '#00ff00';
+        ctx.fillText(item.rank, xPositions[0], y);
+        // div = ciel(rank / 64)
+        // divColor = gold when div 1, silver when div 2, bronze when div 3, white when div 4+
+        const divColor = item.rank <= 64 ? '#ffd700' : item.rank <= 128 ? '#c0c0c0' : item.rank <= 192 ? '#cd7f32' : '#ffffff';
+        ctx.fillStyle = divColor;
+        ctx.fillText(Math.ceil(item.rank / 64), xPositions[1], y);
+
+        ctx.fillStyle = '#ffffff';
+        const tagEndX = App.tmTag(App.tmSplit(item.playerTag).arr, ctx, 110, y);
+        ctx.fillText(item.playerName, tagEndX + 5, y);
+
+        ctx.fillStyle = `rgb(0, 255, 255)`;
+        ctx.fillText(App.msToTime(item.score), xPositions[3], y);
+        y += 25;
+    });
+
+    const imageBuffer = canvas.toBuffer();
+    return imageBuffer;
+}
+
+function clamp(num, min, max) {
+    return Math.min(Math.max(num, min), max);
+}
