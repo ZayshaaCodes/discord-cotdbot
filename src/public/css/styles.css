@@ -11,5 +11,5 @@ body {
 
 @font-face {
   font-family: 'ForkAwesome';
-  src: url('./fonts/forkawesome-webfont.ttf') format('truetype');
+  src: url('../fonts/forkawesome-webfont.ttf') format('truetype');
 }

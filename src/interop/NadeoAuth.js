@@ -94,8 +94,10 @@ class AuthToken {
 }
 
 class NadeoAuth {
+    static instance = null;
     constructor() {
         this.Tokens = {};
+        NadeoAuth.instance = this;
     }
 
     //connect to the nadeo api

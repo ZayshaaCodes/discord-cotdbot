@@ -8,8 +8,6 @@
     const cData = await chalId.json();
     console.log(cData);
     const id = cData;
-    
-
 
     const response = await fetch(`/api/standing/${id}`);
     const data = await response.json();
