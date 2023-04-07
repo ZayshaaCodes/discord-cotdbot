@@ -10,6 +10,13 @@ class TmCoreAPI {
         this.auth = auth;
     }
 
+    // api/routes
+    async getRoutes() {
+        const url = `${this.coreURL}/api/routes`;
+        const routes = await makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
+        return { url: this.coreURL, routes };
+    }
+
     /** 
      * @param {[string]} players
      * @returns {[{accountId: string, clubTag: string}]}
@@ -21,6 +28,17 @@ class TmCoreAPI {
     }
 
     /** 
+     * @param {[string]} players
+     * @returns {[{accountId: string, zoneId: string}]}
+     */
+    async getPlayerZones(players) {
+        const url = `${this.coreURL}/accounts/zones/?accountIdList=${players}`;
+        const playerInfo = await makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
+        return playerInfo;
+    }
+
+
+    /** 
      * @param {string[]} players 
      * @returns {[{accountId: string, displayName: string}]}
     */
@@ -28,6 +46,19 @@ class TmCoreAPI {
         const url = `${this.coreURL}/accounts/displayNames/?accountIdList=${players}`;
         const playerInfo = await makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
         return playerInfo;
+    }
+
+    //GET https://prod.trackmania.core.nadeo.online/mapRecords/{mapRecordId}
+    async getMapRecord(mapRecordId) {
+        const url = `${this.coreURL}/mapRecords/${mapRecordId}`;
+        const mapRecord = await makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
+        return mapRecord;
+    }
+
+    async getZones() {
+        const url = `${this.coreURL}/zones`;
+        const zones = await makeAPIRequest(url, "GET", null, await this.auth.getNadeoServicesToken());
+        return zones;
     }
 
 
@@ -71,6 +102,7 @@ class TmLiveAPI {
         this.auth = auth;
     }
 
+
     /**
     * @param {Number} clubId 
     * @returns {{id: Number, name: String, tag: String, description: String}}
@@ -94,7 +126,7 @@ class TmLiveAPI {
      * @param {Number} length
      * @returns {{clubMemberList: [{accountId: String, role: String, vip, Boolean}], maxPage: Number, itemCount: Number}}
      */
-    async getMemberIdsFromClub(clubId, offset, length) {
+    async getMemberIdsFromClub(clubId, offset = 0, length = 20) {
         const url = `${this.liveURL}/api/token/club/${clubId}/member?offset=${offset}&length=${length}`;
         const token = await this.auth.getNadeoLiveServicesToken();
 
@@ -119,6 +151,24 @@ class TmLiveAPI {
         const clubInfo = await makeAPIRequest(url, "POST", data, token);
         return clubInfo;
     }
+
+    /**
+     * @param {String} mapUid
+     * @returns {{groupUid: String, mapUid: String, score: Number, zones: [{zoneId: String, zoneName: String, ranking: {position: Number, length: Number}}]}}
+     */
+    async getPersonalBests(mapUid) {
+        const url = `${this.liveURL}/api/token/leaderboard/group/Personal_Best/map/${mapUid}`;
+        const token = await this.auth.getNadeoLiveServicesToken();
+        const personalBests = await makeAPIRequest(url, "GET", null, token);
+        return personalBests;
+    }
+
+    //others
+    //https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/HVWPIUGFbtDTbQ6_r5bRL3MWWwj/club/39343/surround/1/1
+    //https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/HVWPIUGFbtDTbQ6_r5bRL3MWWwj/club/39343/top
+    //https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/HVWPIUGFbtDTbQ6_r5bRL3MWWwj/surround/1/1
+    //https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/HVWPIUGFbtDTbQ6_r5bRL3MWWwj/top
+    //https://live-services.trackmania.nadeo.live/api/token/leaderboard/group/Personal_Best/map/HVWPIUGFbtDTbQ6_r5bRL3MWWwj
 }
 
 class TmClubAPI {
@@ -130,6 +180,13 @@ class TmClubAPI {
         this.compclubURL = "https://competition.trackmania.nadeo.club";
         this.matchclubURL = "https://matchmaking.trackmania.nadeo.club";
         this.auth = auth;
+    }
+
+    // api/routes
+    async getRoutes() {
+        const url = `${this.clubclubURL}/routes`;
+        const routes = await makeAPIRequest(url, "GET", null, await this.auth.getNadeoLiveServicesToken());
+        return { url: this.clubclubURL, routes };
     }
 
     /**
@@ -179,12 +236,7 @@ class TmClubAPI {
      * @returns {{uid: string, cardinal: number, records: [{player: string, score: number, rank: number}]}}
      */
     async GetChallengeStandingForPlayers(challengeid, mapid, players) {
-        let playersEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}/players?players[]=`;
-
-        // for(uint n = 0; n < players.Length; n++ )
-        for (let n = 0; n < players.length; n++) {
-            playersEndpoint += "&players[]=" + players[n];
-        }
+        let playersEndpoint = `${this.compclubURL}/api/challenges/${challengeid}/records/maps/${mapid}/players?players[]=${players.join("&players[]=")}`;
 
         const res = await makeAPIRequest(playersEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
 
@@ -213,7 +265,7 @@ class TmClubAPI {
     /**
      * @param {number} length
      * @param {number} offset
-     * @returns {[id: number, uid: string, name: string, startDate: string, endDate: string, status: string, leaderboardId: string]}
+     * @returns {[{id: number, uid: string, name: string, startDate: string, endDate: string, status: string, leaderboardId: string}]}
     */
     async getChallengesList(length = 5, offset = 0) {
         const challengeListEndpoint = `${this.compclubURL}/api/challenges?length=${length}&offset=${offset}`;
@@ -286,6 +338,12 @@ class TmClubAPI {
         return competitionLeaderboard;
     }
 
+    //GET https://competition.trackmania.nadeo.club/api/challenges/{challengeId}/leaderboard?length={length}&offset={offset}
+    async getChallengeLeaderboard(challengeId, length = 20, offset = 0) {
+        const challengeLeaderboardEndpoint = `${this.compclubURL}/api/challenges/${challengeId}/leaderboard?length=${length}&offset=${offset}`;
+        const challengeLeaderboard = await makeAPIRequest(challengeLeaderboardEndpoint, "GET", null, await this.auth.getNadeoClubServicesToken());
+        return challengeLeaderboard;
+    }
 }
 
 class TmIo {
@@ -332,6 +390,7 @@ async function makeAPIRequest(url, method = "GET", body = null, token = null) {
 
     return response.json();
 }
+
 
 class TmApi {
     constructor(auth) {

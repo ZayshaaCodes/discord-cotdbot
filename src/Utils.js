@@ -1,8 +1,13 @@
-const { json } = require("node:stream/consumers");
-const { NadeoAPI } = require("./interop/NadeoAPI");
-
 class AppUtils {
 
+    /**
+     * 
+     * @param {string[]} arr 
+     * @param {CanvasRenderingContext2D} ctx
+     * @param {number} x
+     * @param {number} y
+     * @returns {number} the x position of the end of the text
+     */
     static drawTag(arr, ctx, x, y) {
         let openSpans = false;
         let currentX = 0;
@@ -37,6 +42,11 @@ class AppUtils {
         return currentX + x;
     }
 
+    /**
+     * 
+     * @param {string} input 
+     * @returns {{input: string, arr: string[], plain: string}}
+     */
     static tmSplit(input) {
         // Use regex to match Trackmania formatting characters
         const formattingRegex = /\$[oiwntsgzl$<]{1}|\$[0-9a-f]{3}|.+?/gi;
@@ -52,6 +62,7 @@ class AppUtils {
         }
         const plain = displayedText.join("");
         return { input, arr, plain };
+
     }
 
     static msToTime(ms) {
@@ -119,90 +130,90 @@ class AppUtils {
     }
 }
 
-class ApiUtils {
+// class ApiUtils {
 
-    static async getMapForDate(api, date = new Date()) {
-        const now = new Date();
+//     static async getMapForDate(api, date = new Date()) {
+//         const now = new Date();
 
-        // Date can't be in the future, log and give up
-        if (date.getTime() > now.getTime()) {
-            console.log("date cant be in the future");
-            return null;
-        }
+//         // Date can't be in the future, log and give up
+//         if (date.getTime() > now.getTime()) {
+//             console.log("date cant be in the future");
+//             return null;
+//         }
 
-        const monthsDifference = (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
-        const dayOfMonth = date.getUTCDay() - 1; // Subtract 1 to make it 0-based index
+//         const monthsDifference = (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth());
+//         const dayOfMonth = date.getUTCDay() - 1; // Subtract 1 to make it 0-based index
 
-        try {
-            console.log("monthsDifference", monthsDifference);
-            const response = await api.getTOTDData(monthsDifference);
-            console.log("responseData", response.days);
-
-
-            if (responseData && responseData.days && responseData.days.length > dayOfMonth) {
-                return responseData.days[dayOfMonth];
-            } else {
-                console.log("No map data available for the given date");
-                return null;
-            }
-        } catch (error) {
-            console.error("Error fetching map data:", error);
-            return null;
-        }
-    }
-
-    /**
-     * @param { NadeoAPI } api
-     * @param { string } challengeId
-     */
-    static async getChallengeById(api, challengeId) {
-        
-        return challenges.find(c => c.id === challengeId);
-    }
-
-    /**
-     * @param { NadeoAPI } api
-     * @param { string } challengeId
-     */
-    static async getMostRecentCOTD(api) {
-        const challenges = (await api.getChallengeList(5, 0)).filter(c => c.name.includes("COTD"));
-        const currentTime = new Date();
-        for (const challenge of challenges) {
-            const startDate = new Date(challenge.startDate * 1000 - 1000 * 60 * 3);
-            const diff = startDate.getTime() - currentTime.getTime();
-            if (diff < 0) {
-                return challenge;
-            }
-        }
-    }
+//         try {
+//             console.log("monthsDifference", monthsDifference);
+//             const response = await api.getTOTDData(monthsDifference);
+//             console.log("responseData", response.days);
 
 
-    /**
-     * @param { NadeoAPI } api
-     * @param { string } challengeId
-     * @param { [string] } players
-     */
-    static async GetChallengeStandings(api, players, challengeId) {
-        const allStanding = [];
-        for (let i = 0; i < players.length; i += 20) {
-            let ids = players.slice(i, i + 20);
-            let standing = await api.GetCurrentStandingForPlayers(ids, challengeId, mapUid);
-            allStanding.push(...standing.records);
-        }
-        allStanding.sort((a, b) => a.rank - b.rank);
+//             if (responseData && responseData.days && responseData.days.length > dayOfMonth) {
+//                 return responseData.days[dayOfMonth];
+//             } else {
+//                 console.log("No map data available for the given date");
+//                 return null;
+//             }
+//         } catch (error) {
+//             console.error("Error fetching map data:", error);
+//             return null;
+//         }
+//     }
 
-        return allStanding;
+//     /**
+//      * @param { NadeoAPI } api
+//      * @param { string } challengeId
+//      */
+//     static async getChallengeById(api, challengeId) {
 
-        // for (const record of allStanding) {
-        //     record.playerName = this.clubData.members[record.player].name;
-        //     record.playerTag = this.clubData.members[record.player].tag;
-        // }
+//         return challenges.find(c => c.id === challengeId);
+//     }
 
-        // sort by rank
+//     /**
+//      * @param { NadeoAPI } api
+//      * @param { string } challengeId
+//      */
+//     static async getMostRecentCOTD(api) {
+//         const challenges = (await api.getChallengeList(5, 0)).filter(c => c.name.includes("COTD"));
+//         const currentTime = new Date();
+//         for (const challenge of challenges) {
+//             const startDate = new Date(challenge.startDate * 1000 - 1000 * 60 * 3);
+//             const diff = startDate.getTime() - currentTime.getTime();
+//             if (diff < 0) {
+//                 return challenge;
+//             }
+//         }
+//     }
 
-        // const cacheFile = `./cache/${challengeId}.json`;
-        // fs.writeFileSync(cacheFile, JSON.stringify(allStanding, null, 2));
-    }
-}
 
-module.exports = { AppUtils, ApiUtils };
+//     /**
+//      * @param { NadeoAPI } api
+//      * @param { string } challengeId
+//      * @param { [string] } players
+//      */
+//     static async GetChallengeStandings(api, players, challengeId) {
+//         const allStanding = [];
+//         for (let i = 0; i < players.length; i += 20) {
+//             let ids = players.slice(i, i + 20);
+//             let standing = await api.GetCurrentStandingForPlayers(ids, challengeId, mapUid);
+//             allStanding.push(...standing.records);
+//         }
+//         allStanding.sort((a, b) => a.rank - b.rank);
+
+//         return allStanding;
+
+//         // for (const record of allStanding) {
+//         //     record.playerName = this.clubData.members[record.player].name;
+//         //     record.playerTag = this.clubData.members[record.player].tag;
+//         // }
+
+//         // sort by rank
+
+//         // const cacheFile = `./cache/${challengeId}.json`;
+//         // fs.writeFileSync(cacheFile, JSON.stringify(allStanding, null, 2));
+//     }
+// }
+
+module.exports = { AppUtils };
