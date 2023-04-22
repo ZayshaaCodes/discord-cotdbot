@@ -17,4 +17,5 @@ RUN ln -snf /usr/share/zoneinfo/America/Los_Angeles /etc/localtime && echo Ameri
 
 RUN npm init -y
 
-CMD [ "node", "src/testing.js" ]
+# CMD [ "node", "src/testing.js" ]
+CMD [ "node", "src/server.js" ]

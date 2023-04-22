@@ -8,8 +8,10 @@ yarn-error.log*
 COTDLiveQualifying/
 cache/
 reference/
+node_modules/
 .env
 
 # IDE settings
 .vscode/
 .idea/
+
