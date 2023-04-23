@@ -11,7 +11,7 @@ class ClubData {
     this.membercount = 0;
     this.members = {};
     this.lastUpdated = 0;
-    this.path = "cache/clubdata.json";
+    this.path = path;
     this.api = api;
   }
 
