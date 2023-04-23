@@ -1,27 +1,36 @@
 const fs = require('fs');
-const { TmApi } = require('../interop/TmApi');
 
+/**
+ * @typedef {import('../api/TmApi')} TmApi
+ */
 class ClubData {
-  constructor() {
+  constructor(path, api) {
     this.name = "";
     this.tag = "";
     this.id = 0;
     this.membercount = 0;
     this.members = {};
+    this.lastUpdated = 0;
+    this.path = "cache/clubdata.json";
+    this.api = api;
   }
 
   async tryLoadFromFile() {
     try {
-      const fileData = await fs.promises.readFile("cache/clubdata.json");
+
+      const fileData = await fs.promises.readFile(this.path, 'utf-8');
       const data = JSON.parse(fileData);
       this.name = data.name;
       this.tag = data.tag;
       this.id = data.id;
       this.members = data.members;
       this.membercount = data.membercount;
+      this.lastUpdated = data.lastUpdated;
+      
       return true;
     } catch (err) {
-      console.log(err);
+      // console.log(err);
+      console.log("No club data file found");
     }
     return false;
   }
@@ -29,32 +38,35 @@ class ClubData {
   /**
    * @param {TmApi} api 
    */
-  async updateClubData(api) {
-    await this.updateClubInfo(api);
-    await this.updateClubMemberInfo(api);
-    fs.writeFileSync("cache/json", JSON.stringify(this, null, 2));
+  async updateClubData() {
+    await this.updateClubInfo();
+    await this.updateClubMemberInfo();
+    this.lastUpdated = Date.now();
+    const replacer = (key, value) => {
+      if (key === 'api' || key === 'path') {
+        return undefined; // exclude property from result
+      }
+      return value; // include property in result
+    };
+    fs.writeFileSync(this.path, JSON.stringify(this, replacer, 2));
   }
 
-  /**
-  * @param {TmApi} api 
-  */
-  async updateClubInfo(api) {
-    const req = await api.live.getClubData(this.id);
+  async updateClubInfo() {
+    const req = await this.api.live.getClubData(this.id);
 
     this.name = req.name;
     this.tag = req.tag;
     this.id = req.id;
   }
 
-  /**
-   * @param {TmApi} api 
-   */
-  async updateClubMemberInfo(api) {
+  async updateClubMemberInfo() {
     const pageSize = 20;
     let count = null;
     let pages = 1;
+    this.members = {};
+
     for (let i = 0; i < pages; i++) {
-      const membersReq = await api.live.getClubMembers(this.id, i, pageSize);
+      const membersReq = await this.api.live.getMemberIdsFromClub(this.id, i, pageSize);
       if (pages == 1) {
         count = membersReq.itemCount;
         pages = membersReq.maxPage;
@@ -77,8 +89,8 @@ class ClubData {
     const memberIds = Object.keys(this.members);
     for (let i = 0; i < memberIds.length; i += 20) {
       const ids = memberIds.slice(i, i + 20);
-      const names = await api.core.getPlayerDisplayNames(ids);
-      const tags = await api.core.getPlayerDisplayTags(ids);
+      const names = await this.api.core.getPlayerDisplayNames(ids);
+      const tags = await this.api.core.getPlayerDisplayTags(ids);
       //doing names and tag separately because the api doesnt always return the same amount of data
       for (let i = 0; i < names.length; i++) {
         const name = names[i];

@@ -367,6 +367,16 @@ class TmIo {
         const totdData = await makeAPIRequest(url, "GET");
         return totdData;
     }
+
+    /**
+     * 
+     * @returns {Promise<{ group : string, uid : string}>}
+     */
+    async getTotdToday(){
+        const url = `${this.url}/api/totd/today`;
+        const totdData = await makeAPIRequest(url, "GET");
+        return totdData;
+    }
 }
 
 /**
@@ -403,7 +413,6 @@ class TmApi {
 
 
     /**
-     * 
      * @returns {Promise<{challenge: {edition: number, id: number, uid: string, name: string, leaderboardId: number}, 
      * map: {author: string, name: string, mapType: string, mapStyle: string, authorScore: number, goldScore: number, 
      * silverScore: number, bronzeScore: number, mapUid: string, mapId: number, filename: string, fileUrl: string, thumbnailUrl: string}}>}
@@ -422,9 +431,8 @@ class TmApi {
         const monthDiff = currentMonth - monthVal;
 
         const maps = await this.io.getTOTDData(monthDiff);
-        const map = maps.days[dayVal - 1].map
-
-        return { challenge: currentChallenge, map: map };
+        const day = maps.days[dayVal - 1];
+        return { challenge: currentChallenge, map: day ? day.map : null };
     }
 
 }

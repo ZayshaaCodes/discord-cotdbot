@@ -1,3 +1,6 @@
+require('dotenv').config();
+const { Canvas } = require('canvas');
+
 class AppUtils {
 
 
@@ -131,7 +134,8 @@ class AppUtils {
         //render table body
         ctx.font = 'bold 17px Fork Awesome';
         ctx.fillStyle = '#ffffff';
-        data.forEach(item => {
+        for (let i = 0; i < data.length; i++) {
+            const item = data[i];
             ctx.fillStyle = '#00ff00';
             ctx.fillText(item.rank, xPositions[0], y);
             // div = ciel(rank / 64)
@@ -141,13 +145,13 @@ class AppUtils {
             ctx.fillText(Math.ceil(item.rank / 64), xPositions[1], y);
 
             ctx.fillStyle = '#ffffff';
-            const tagEndX = App.tmTag(App.tmSplit(item.playerTag).arr, ctx, 110, y);
+            const tagEndX = AppUtils.drawTag(AppUtils.tmSplit(item.playerTag).arr, ctx, xPositions[2], y);
             ctx.fillText(item.playerName, tagEndX + 5, y);
 
-            ctx.fillStyle = `rgb(0, 255, 255)`;
-            ctx.fillText(App.msToTime(item.score), xPositions[3], y);
+            ctx.fillStyle = `rgb(255, 255, 255)`;
+            ctx.fillText(item.score, xPositions[3], y);
             y += 25;
-        });
+        }
 
         const imageBuffer = canvas.toBuffer();
         return imageBuffer;
